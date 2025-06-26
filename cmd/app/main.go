@@ -31,8 +31,10 @@ func run() error {
 	// Load configuration
 	config := loadConfig()
 
+	appContext, cancelAppContext := context.WithCancel(context.Background())
+	defer cancelAppContext()
 	// Init adapters
-	dbInstance, err := postgres.New(context.Background(), config.dbConfig)
+	dbInstance, err := postgres.New(appContext, config.dbConfig)
 	if err != nil {
 		return fmt.Errorf("postgres.New: %w", err)
 	}
@@ -71,7 +73,7 @@ func run() error {
 	case err := <-errs:
 		return err
 	case <-stop:
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(appContext, 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
 			log.Printf("server shudown: %s", err)
