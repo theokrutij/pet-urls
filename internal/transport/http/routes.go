@@ -1,5 +1,7 @@
 package http
 
+import "net/http"
+
 func (s *server) initializeRoutes() {
 	// api
 	s.router.HandleFunc("GET /api/v1/health", s.handleHealthcheck)
@@ -17,4 +19,9 @@ func (s *server) initializeRoutes() {
 
 	//redirects
 	s.router.HandleFunc("GET /{code}", s.redirectToOriginalURL())
+
+	// static
+	if s.pathToStatic != "" {
+		s.router.Handle("/", http.FileServer(http.Dir(s.pathToStatic)))
+	}
 }
