@@ -15,6 +15,7 @@ var (
 	ErrInvalidURL        = errors.New("invalid URL")
 	ErrTokenExpired      = errors.New("token expired")
 	ErrTokenDoesNotExist = errors.New("token does not exist")
+	ErrTokenIsNotUnique  = errors.New("token is not unique")
 )
 
 type Token string
@@ -24,10 +25,13 @@ type URLToken struct {
 	Token     Token
 	URL       URL
 	ExpiresAt *time.Time
+	ownerID   []byte
 }
 
-type URLTokenWithOwner struct {
-	URLToken
+type CreateTokenInput struct {
+	URL     string
+	TTL     time.Duration
+	Token   string
 	OwnerID []byte
 }
 
@@ -84,35 +88,65 @@ func (s *shortener) HealthCheck(ctx context.Context) error {
 }
 
 func (s *shortener) GenerateToken(ctx context.Context, rawURL string) (URLToken, error) {
-	var t URLToken
+	createTokenInput := CreateTokenInput{URL: rawURL}
+	return s.createToken(ctx, createTokenInput)
+}
 
-	// Adds http scheme if scheme is missing, returns error if URL is invalid
-	httpURL, err := normalizeHTTP(rawURL)
-	if err != nil {
-		return t, fmt.Errorf("shortener, validating url: %w, url=%s", ErrInvalidURL, rawURL)
+func (s *shortener) CreateTokenWithOwner(ctx context.Context, input CreateTokenInput) (URLToken, error) {
+	var output URLToken
+	if input.OwnerID == nil {
+		return output, errors.New("shortener, creating token with owner: owner cannot be empty")
 	}
-	t.URL = httpURL
 
-	// TODO: check if converting to UTC is necessary here, not sure
-	exp := time.Now().UTC().Add(s.tokenTTL)
-	t.ExpiresAt = &exp
+	token, err := s.createToken(ctx, input)
+	if errors.Is(err, ErrTokenIsNotUnique) {
+		return output, fmt.Errorf("shortener, creating token with owner: %w", err)
+	}
 
-	t.Token, err = s.generateRandomBase58()
+	return token, err
+}
+
+func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (URLToken, error) {
+	var output URLToken
+
+	httpURL, err := normalizeHTTP(string(input.URL))
 	if err != nil {
-		return t, fmt.Errorf("shortener, generating random token: %w", err)
+		return output, ErrInvalidURL
+	}
+	output.URL = httpURL
+
+	var ttl time.Duration
+	if input.TTL != 0 {
+		ttl = input.TTL
+	} else {
+		ttl = s.tokenTTL
+	}
+	exp := time.Now().UTC().Add(ttl)
+	output.ExpiresAt = &exp
+
+	if input.Token != "" {
+		output.Token = Token(input.Token)
+	} else {
+		output.Token, err = s.generateRandomBase58()
+		if err != nil {
+			return output, fmt.Errorf("generating random token: %w", err)
+		}
 	}
 
 	// Save to database
 	// NOTE: token collision treated as critical error, p ≈ 5.42e-20
-	if err := s.repo.SaveToken(ctx, t); err != nil {
-		return t, fmt.Errorf("shortener, saving token to db: %w, token=%s", err, t.Token)
+	err = s.repo.SaveToken(ctx, output)
+	if isNotUniqueError(err) {
+		return output, fmt.Errorf("saving to repo: %w", ErrTokenIsNotUnique)
+	} else if err != nil {
+		return output, fmt.Errorf("saving to repo: %w", err)
 	}
 
 	// Storing new token in cache, ignoring errors for now
 	// TODO: log cache failure
-	_ = s.cache.SaveToken(ctx, t, s.cacheTTL)
+	_ = s.cache.SaveToken(ctx, output, s.cacheTTL)
 
-	return t, nil
+	return output, nil
 }
 
 func (s *shortener) generateRandomBase58() (Token, error) {
@@ -122,6 +156,15 @@ func (s *shortener) generateRandomBase58() (Token, error) {
 	}
 	tokenStr := base58.Encode(raw)
 	return Token(tokenStr), nil
+}
+
+type notUniqueError interface {
+	NotUnique() bool
+}
+
+func isNotUniqueError(err error) bool {
+	var nuErr notUniqueError
+	return errors.As(err, &nuErr) && nuErr.NotUnique()
 }
 
 func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, error) {
@@ -161,7 +204,3 @@ func isNotFoundError(err error) bool {
 	var nfErr NotFoundError
 	return errors.As(err, &nfErr) && nfErr.NotFound()
 }
-
-// func (s *shortener) CreateTokenWithOwner(ctx context.Context, token URLTokenWithOwner) (URLTokenWithOwner, error) {
-
-// }

@@ -9,7 +9,7 @@ type Service interface {
 	HealthCheck(ctx context.Context) error
 
 	// GenerateToken generates random base58-encoded token and
-	// sets ttl specified in Config.TokenTTL (default: 1 hour).
+	// sets default ttl from app-wide config
 	//
 	//	- If url cannot be interpreted as valid HTTP url, returns ErrInvalidURL
 	GenerateToken(ctx context.Context, url string) (URLToken, error)
@@ -21,13 +21,12 @@ type Service interface {
 	ResolveToken(ctx context.Context, tokenStr string) (url URL, err error)
 
 	// CreateTokenWithOwner creates new token with ownership rights.
-	// If token is not provided, generates random base58-encoded token.
-	// If ttl is not provided, sets ttl specified in Config.TokenTTL (default: 1 hour)
+	// If input.Token is empty, generates random base58-encoded token.
+	// If input.TTL = 0, sets default ttl from app-wide config
 	//
-	//	- If token.URL cannot be interpreted as valid HTTP url, returns ErrInvalidURL.
-	//	- If token.ExpiresAt is in the past, returns opaque error.
-	//	- If token.OwnerID is nil, returns an opaque error.
-	// CreateTokenWithOwner(ctx context.Context, token URLTokenWithOwner) (URLToken, error)
+	//	- If input.URL cannot be interpreted as valid HTTP url, returns ErrInvalidURL.
+	//	- If input.Token is not unique, returns ErrTokenIsNotUnique
+	CreateTokenWithOwner(ctx context.Context, input CreateTokenInput) (URLToken, error)
 
 	//
 	// DeleteToken(ctx context.Context, tokenStr string, userID []byte) error
