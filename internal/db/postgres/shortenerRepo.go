@@ -40,15 +40,15 @@ type notFoundError struct {
 	inner error
 }
 
-func (n *notFoundError) Error() string {
+func (n notFoundError) Error() string {
 	return "not found"
 }
 
-func (n *notFoundError) Unwrap() error {
+func (n notFoundError) Unwrap() error {
 	return n.inner
 }
 
-func (n *notFoundError) NotFound() bool {
+func (n notFoundError) NotFound() bool {
 	return true
 }
 

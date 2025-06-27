@@ -15,15 +15,15 @@ type notUniqueError struct {
 	inner error
 }
 
-func (n *notUniqueError) Error() string {
+func (n notUniqueError) Error() string {
 	return "not unique"
 }
 
-func (n *notUniqueError) Unwrap() error {
+func (n notUniqueError) Unwrap() error {
 	return n.inner
 }
 
-func (n *notUniqueError) NotUnique() bool {
+func (n notUniqueError) NotUnique() bool {
 	return true
 }
 
