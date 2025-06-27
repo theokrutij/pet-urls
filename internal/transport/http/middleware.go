@@ -2,9 +2,13 @@ package http
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/theokrutij/pet-urls/internal/services/auth"
 )
 
 type statusCapture struct {
@@ -41,3 +45,46 @@ func timeoutMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+func (s *server) requiresAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token, err := tokenFromHeader(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		userID, err := s.auth.Authenticate(r.Context(), []byte(token))
+		if errors.Is(err, auth.ErrTokenExpired) {
+			http.Error(w, "Token expired", http.StatusUnauthorized)
+			return
+		} else if err != nil {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := contextWithUserID(r.Context(), userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func tokenFromHeader(r *http.Request) (string, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("authorization header required")
+	}
+
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return "", errors.New("bearer schema required")
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+
+	if token == "" {
+		return "", errors.New("token is empty")
+	}
+
+	return token, nil
+}
+
+//TODO: max body middleware

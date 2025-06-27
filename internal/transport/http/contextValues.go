@@ -4,7 +4,7 @@ import "context"
 
 type contextKey int
 
-var userKey int
+var userKey contextKey
 
 func contextWithUserID(ctx context.Context, userID []byte) context.Context {
 	return context.WithValue(ctx, userKey, userID)

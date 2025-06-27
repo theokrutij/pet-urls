@@ -110,7 +110,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, refreshToken)
+	s.setRefreshTokenCookie(w, refreshToken)
 	writeAccessTokenAsJSON(w, accessToken)
 }
 
@@ -129,12 +129,13 @@ const (
 	refreshTokenMaxAge     = 7 * 24 * time.Hour
 )
 
-func setRefreshTokenCookie(w http.ResponseWriter, token []byte) {
+func (s *server) setRefreshTokenCookie(w http.ResponseWriter, token []byte) {
 	cookie := http.Cookie{
 		Name:     refreshTokenCookieName,
 		Value:    base64.URLEncoding.EncodeToString(token),
+		Path:     "/api",
 		MaxAge:   int(refreshTokenMaxAge.Seconds()),
-		Secure:   true,
+		Secure:   !s.debug, // allow cookies over http for debugging
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	}
@@ -176,7 +177,7 @@ func (s *server) handleRegistration(w http.ResponseWriter, r *http.Request) { //
 		return
 	}
 
-	setRefreshTokenCookie(w, refreshToken)
+	s.setRefreshTokenCookie(w, refreshToken)
 	writeAccessTokenAsJSON(w, accessToken)
 }
 
@@ -216,4 +217,56 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, codeInternalError, "internal")
 	}
+}
+
+func (s *server) handleCreateTokenWithOwner(w http.ResponseWriter, r *http.Request) {
+	type requestSchema struct {
+		Token string `json:"token"`
+		URL   string `json:"url"`
+		TTL   int    `json:"ttl"`
+	}
+	type responseSchema struct {
+		Token     shortener.Token `json:"token"`
+		ExpiresAt time.Time       `json:"expires_at"`
+	}
+
+	request, err := readBodyAsJSON[requestSchema](r)
+	if err != nil {
+		writeError(w, codeInvalidRequest, "unparsable")
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, codeUnauthenticated, "unauthenticated")
+		return
+	}
+
+	input := shortener.CreateTokenInput{
+		URL:     request.URL,
+		Token:   request.Token,
+		TTL:     time.Duration(request.TTL),
+		OwnerID: userID,
+	}
+	token, err := s.shortener.CreateTokenWithOwner(r.Context(), input)
+	if errors.Is(err, shortener.ErrInvalidURL) {
+		writeError(w, codeInvalidParameter, "url is not a valid HTTP url")
+		return
+	} else if errors.Is(err, shortener.ErrInvalidToken) {
+		writeError(w, codeInvalidParameter, "token must contain at most 64 characters")
+		return
+	} else if errors.Is(err, shortener.ErrTokenIsNotUnique) {
+		writeError(w, codeInvalidParameter, "token already exists")
+		return
+	} else if err != nil {
+		writeError(w, codeInternalError, "internal")
+		return
+	}
+
+	response := responseSchema{
+		Token:     token.Token,
+		ExpiresAt: *token.ExpiresAt,
+	}
+
+	writeResponseAsJSON(w, response, 201)
 }

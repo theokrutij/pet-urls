@@ -8,7 +8,7 @@ func (s *server) initializeRoutes() {
 	s.router.HandleFunc("POST /api/v1/short", s.handleGenerateURLToken)
 
 	// TODO:
-	// s.router.Handle("POST /api/v1/short/my", s.requiresAuthMiddleware(s.handleCreateTokenWithOwner)
+	s.router.Handle("POST /api/v1/short/my", s.requiresAuthMiddleware(http.HandlerFunc(s.handleCreateTokenWithOwner)))
 	// s.router.Handle("DELETE /api/v1/short/my/{token}", s.requiresAuthMiddleware(s.handleDeleteToken))
 
 	// auth
