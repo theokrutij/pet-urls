@@ -21,15 +21,16 @@ func (s *shortenerRepository) HealthCheck(ctx context.Context) error {
 
 func (s *shortenerRepository) SaveToken(ctx context.Context, token shortener.URLToken) error {
 	const query = `
-		INSERT INTO url_tokens (token, url, valid_until)
-		VALUES ($1, $2, $3)
+		INSERT INTO url_tokens (token, url, valid_until, owner_id)
+		VALUES ($1, $2, $3, $4)
 	`
 	err := withRetry(ctx, func(ctx context.Context) error {
-		_, err := s.p.Exec(ctx, query, token.Token, token.URL, token.ExpiresAt)
+		_, err := s.p.Exec(ctx, query, token.Token, token.URL, token.ExpiresAt, token.OwnerID)
 		return err
 	})
-
-	if err != nil {
+	if isNotUniqueError(err) {
+		return fmt.Errorf("postgres, saving token: %w", notUniqueError{err})
+	} else if err != nil {
 		return fmt.Errorf("postgres, saving token: %w", err)
 	}
 
@@ -54,12 +55,12 @@ func (n notFoundError) NotFound() bool {
 
 func (s *shortenerRepository) GetToken(ctx context.Context, tokenStr string) (shortener.URLToken, error) {
 	const query = `
-		SELECT url, valid_until FROM url_tokens
+		SELECT url, valid_until, owner_id FROM url_tokens
 		WHERE token = $1
 	`
 	token := shortener.URLToken{Token: shortener.Token(tokenStr)}
 	err := withRetry(ctx, func(ctx context.Context) error {
-		return s.p.QueryRow(ctx, query, tokenStr).Scan(&token.URL, &token.ExpiresAt)
+		return s.p.QueryRow(ctx, query, tokenStr).Scan(&token.URL, &token.ExpiresAt, &token.OwnerID)
 	})
 
 	if isNotFoundError(err) {
