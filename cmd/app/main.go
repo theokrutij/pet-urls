@@ -16,11 +16,6 @@ import (
 	httpx "github.com/theokrutij/pet-urls/internal/transport/http"
 )
 
-//TODO: define flags
-// - queue url
-// - cache url
-// - postgres url
-
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
@@ -29,7 +24,10 @@ func main() {
 
 func run() error {
 	// Load configuration
-	config := loadConfig()
+	config, err := loadConfig()
+	if err != nil {
+		return err
+	}
 
 	appContext, cancelAppContext := context.WithCancel(context.Background())
 	defer cancelAppContext()
@@ -50,8 +48,8 @@ func run() error {
 		auth.New(
 			postgres.NewAuthRepository(dbInstance),
 			auth.Config{},
-			func() []byte { return []byte("abc") }, // TODO: implement keyfunc
-		), // TODO: replace with proper auth implementation, define config
+			func() []byte { return []byte("abc") },
+		),
 		*config.serverConfig,
 	)
 	if err != nil {
