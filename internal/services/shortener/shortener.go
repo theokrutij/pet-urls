@@ -1,6 +1,7 @@
 package shortener
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -18,6 +19,7 @@ var (
 	ErrTokenDoesNotExist = errors.New("token does not exist")
 	ErrTokenIsNotUnique  = errors.New("token is not unique")
 	ErrInvalidToken      = errors.New("invalid token")
+	ErrNotTokenOwner     = errors.New("requesting user is not the token owner")
 )
 
 type Token string
@@ -210,4 +212,20 @@ type NotFoundError interface {
 func isNotFoundError(err error) bool {
 	var nfErr NotFoundError
 	return errors.As(err, &nfErr) && nfErr.NotFound()
+}
+
+func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, userID []byte) error {
+	token, err := s.repo.GetToken(ctx, tokenStr)
+	if isNotFoundError(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("shortener, fetching token from db for deletion: %w", err)
+	}
+	if !bytes.Equal(token.OwnerID, userID) {
+		return fmt.Errorf("shortener, deleting token: %w", ErrNotTokenOwner)
+	}
+
+	// TODO: handle cache failure
+	s.cache.DeleteToken(ctx, tokenStr)
+	return s.repo.DeleteToken(ctx, tokenStr)
 }

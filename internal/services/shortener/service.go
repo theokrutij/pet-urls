@@ -29,6 +29,8 @@ type Service interface {
 	//	- If input.Token is not unique, returns ErrTokenIsNotUnique
 	CreateTokenWithOwner(ctx context.Context, input CreateTokenInput) (URLToken, error)
 
+	// DeleteToken deletes token matched by tokenStr if token's owner is the same as requestingUserID
 	//
-	// DeleteToken(ctx context.Context, tokenStr string, userID []byte) error
+	// If requestingUserID does not match token owner ID, returns ErrNotTokenOwner
+	DeleteToken(ctx context.Context, tokenStr string, requestingUserID []byte) error
 }
