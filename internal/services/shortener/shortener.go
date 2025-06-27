@@ -27,7 +27,7 @@ type URLToken struct {
 	Token     Token
 	URL       URL
 	ExpiresAt *time.Time
-	ownerID   []byte
+	OwnerID   []byte
 }
 
 type CreateTokenInput struct {
@@ -138,6 +138,7 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 			return output, fmt.Errorf("generating random token: %w", err)
 		}
 	}
+	output.OwnerID = input.OwnerID
 
 	// Save to database
 	// NOTE: token collision treated as critical error, p ≈ 5.42e-20
