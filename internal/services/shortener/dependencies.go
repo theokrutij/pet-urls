@@ -6,7 +6,8 @@ import (
 )
 
 type repository interface {
-	// HealthCheck checks that repository is available
+	// HealthCheck checks that repository is available.
+	// If healthy, returns nil.
 	HealthCheck(ctx context.Context) error
 	// SaveToken saves url token to persistent repository.
 	//
@@ -22,7 +23,7 @@ type repository interface {
 
 type cache interface {
 	// TODO: docs
-
+	HealthCheck(ctx context.Context) error
 	SaveToken(ctx context.Context, token URLToken, ttl time.Duration) error
 	GetToken(ctx context.Context, tokenStr string) (URLToken, error)
 	DeleteToken(ctx context.Context, tokenStr string) error

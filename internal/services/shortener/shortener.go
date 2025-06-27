@@ -83,11 +83,14 @@ func applyConfig(s *shortener, c Config) *shortener {
 	return s
 }
 
-// TODO: add cache healthcheck
 func (s *shortener) HealthCheck(ctx context.Context) error {
 	if err := s.repo.HealthCheck(ctx); err != nil {
-		return fmt.Errorf("shortener, checking health: %w", err)
+		return fmt.Errorf("shortener, repo healthcheck: %w", err)
 	}
+	if err := s.cache.HealthCheck(ctx); err != nil {
+		return fmt.Errorf("shortener, cache healthcheck: %w", err)
+	}
+
 	return nil
 }
 

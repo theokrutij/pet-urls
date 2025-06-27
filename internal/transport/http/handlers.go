@@ -3,7 +3,6 @@ package http
 import (
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -11,16 +10,17 @@ import (
 	"github.com/theokrutij/pet-urls/internal/services/shortener"
 )
 
-// simple healthcheck
-// should also healthcheck shortener (maybe as a separate endpoint)
 func (s *server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {
 	if err := s.shortener.HealthCheck(r.Context()); err != nil {
-		writeError(w, codeInternalError, fmt.Sprintf("server, healthcheck: %s", err))
+		writeError(w, codeInternalError, "internal")
+		return
+	}
+
+	if err := s.auth.HealthCheck(r.Context()); err != nil {
+		writeError(w, codeInternalError, "internal")
 	}
 }
 
-// handleCreateShortURL attempts to read the original URL from the request body
-// and calls shortener.GenerateCode to create a short URL code.
 func (s *server) handleGenerateURLToken(w http.ResponseWriter, r *http.Request) {
 	type requestSchema struct {
 		OriginalURL string `json:"original_url"`
@@ -60,8 +60,6 @@ func (s *server) handleGenerateURLToken(w http.ResponseWriter, r *http.Request) 
 	writeResponseAsJSON(w, response, 201)
 }
 
-// should this piece of logic be split into two?
-// one would handle custom redirect-related logic, the other would talk to the shortener
 // TODO:
 //   - figure out client side caching: appropriate headers and status code for that?
 func (s *server) redirectToOriginalURL() http.HandlerFunc {

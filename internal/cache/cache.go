@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,18 @@ func New(config *Config) *cache {
 type tokenAsCacheValue struct {
 	URL string     `json:"url"`
 	Exp *time.Time `json:"exp,omitempty"`
+}
+
+func (c *cache) HealthCheck(ctx context.Context) error {
+	pong, err := c.rdb.Ping(ctx).Result()
+	if err != nil {
+		return err
+	}
+	if pong != "PONG" {
+		return errors.New("redis didn't pong")
+	}
+
+	return nil
 }
 
 func (c *cache) SaveToken(ctx context.Context, token shortener.URLToken, ttl time.Duration) error {

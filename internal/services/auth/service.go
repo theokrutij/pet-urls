@@ -5,6 +5,9 @@ import (
 )
 
 type Service interface {
+	// Healtcheck runs healthcheck of auth service and all its dependencies.
+	// If healthy, returns nil.
+	HealthCheck(ctx context.Context) error
 	/*
 		Creates new user represented by userID.
 

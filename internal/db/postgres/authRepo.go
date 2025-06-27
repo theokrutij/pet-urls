@@ -31,6 +31,10 @@ func NewAuthRepository(p *postgresConnectionPool) *authRepository {
 	return &authRepository{p}
 }
 
+func (a *authRepository) HealthCheck(ctx context.Context) error {
+	return a.p.Ping(ctx)
+}
+
 func (a *authRepository) SaveUser(ctx context.Context, user auth.UserInRepo) (auth.UserID, error) {
 	const query = `
 		INSERT INTO users (login, password_hash)

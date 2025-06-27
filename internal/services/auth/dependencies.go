@@ -5,6 +5,9 @@ import (
 )
 
 type repository interface {
+	// HealthCheck checks that repository is available.
+	// If healthy, returns nil.
+	HealthCheck(ctx context.Context) error
 	/*
 		Saves new user
 

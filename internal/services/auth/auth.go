@@ -82,6 +82,14 @@ func applyConfig(a *auth, c Config) *auth {
 	return a
 }
 
+func (a *auth) HealthCheck(ctx context.Context) error {
+	if err := a.repo.HealthCheck(ctx); err != nil {
+		return fmt.Errorf("auth, repo healthcheck: %w", err)
+	}
+
+	return nil
+}
+
 func (a *auth) Register(ctx context.Context, login, password string) (RefreshToken, AccessToken, error) {
 	if len(login) > 64 {
 		return nil, nil, fmt.Errorf("auth, registering: %w", ErrInvalidLogin)
