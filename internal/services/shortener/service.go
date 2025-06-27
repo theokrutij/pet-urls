@@ -22,9 +22,10 @@ type Service interface {
 
 	// CreateTokenWithOwner creates new token with ownership rights.
 	// If input.Token is empty, generates random base58-encoded token.
-	// If input.TTL = 0, sets default ttl from app-wide config
+	// If input.TTL <= 0, sets default ttl from app-wide config
 	//
 	//	- If input.URL cannot be interpreted as valid HTTP url, returns ErrInvalidURL.
+	// 	- If input.Token contains more than 64 characters, returns ErrInvalidToken
 	//	- If input.Token is not unique, returns ErrTokenIsNotUnique
 	CreateTokenWithOwner(ctx context.Context, input CreateTokenInput) (URLToken, error)
 

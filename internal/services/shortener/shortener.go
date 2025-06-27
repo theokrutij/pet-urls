@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/btcsuite/btcutil/base58"
 )
@@ -16,6 +17,7 @@ var (
 	ErrTokenExpired      = errors.New("token expired")
 	ErrTokenDoesNotExist = errors.New("token does not exist")
 	ErrTokenIsNotUnique  = errors.New("token is not unique")
+	ErrInvalidToken      = errors.New("invalid token")
 )
 
 type Token string
@@ -115,8 +117,12 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 	}
 	output.URL = httpURL
 
+	if utf8.RuneCountInString(input.Token) > 64 {
+		return output, ErrInvalidToken
+	}
+
 	var ttl time.Duration
-	if input.TTL != 0 {
+	if input.TTL > 0 {
 		ttl = input.TTL
 	} else {
 		ttl = s.tokenTTL
