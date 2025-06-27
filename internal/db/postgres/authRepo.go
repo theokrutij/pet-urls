@@ -95,7 +95,7 @@ func (a *authRepository) GetRefreshToken(ctx context.Context, tokenHash auth.Tok
 	token := auth.RefreshTokenInRepo{Hash: tokenHash}
 
 	err := withRetry(ctx, func(ctx context.Context) error {
-		return a.p.QueryRow(ctx, query, tokenHash).Scan(&token.UserID, token.ExpiresAt, token.RevokedAt)
+		return a.p.QueryRow(ctx, query, tokenHash).Scan(&token.UserID, &token.ExpiresAt, &token.RevokedAt)
 	})
 	if isNotFoundError(err) {
 		return token, fmt.Errorf("postgres, fetching token: %w", &notFoundError{err})
