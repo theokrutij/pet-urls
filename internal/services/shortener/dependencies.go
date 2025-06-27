@@ -6,10 +6,17 @@ import (
 )
 
 type repository interface {
-	// TODO: docs
+	// HealthCheck checks that repository is available
 	HealthCheck(ctx context.Context) error
+	// SaveToken saves url token to persistent repository.
+	//
+	// If token is not unique, err.NotUnique() = true.
 	SaveToken(cxt context.Context, token URLToken) error
+	// GetToken fetches url token from persistent repository.
+	//
+	// If tokenStr doesn't match any token, err.NotFound() = true.
 	GetToken(ctx context.Context, tokenStr string) (URLToken, error)
+	// DeleteToken deletes token from persistent repository.
 	DeleteToken(ctx context.Context, tokenStr string) error
 }
 
