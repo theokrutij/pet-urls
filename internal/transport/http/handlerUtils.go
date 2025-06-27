@@ -48,6 +48,7 @@ const (
 	codeRequestTimeout     apiErrorCode = "REQUEST_TIMED_OUT"
 	codeInvalidCredentials apiErrorCode = "INVALID_CREDENTIALS"
 	codeUnauthenticated    apiErrorCode = "UNAUTHENTICATED"
+	codeMustBeTokenOwner   apiErrorCode = "MUST_BE_TOKEN_OWNER"
 )
 
 func writeError(w http.ResponseWriter, apiCode apiErrorCode, message string) {

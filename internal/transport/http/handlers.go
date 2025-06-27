@@ -66,7 +66,7 @@ func (s *server) handleGenerateURLToken(w http.ResponseWriter, r *http.Request) 
 //   - figure out client side caching: appropriate headers and status code for that?
 func (s *server) redirectToOriginalURL() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.PathValue("code")
+		token := tokenFromPath(r)
 		if token == "" {
 			http.Error(w, "", http.StatusNotFound)
 		}
@@ -78,6 +78,10 @@ func (s *server) redirectToOriginalURL() http.HandlerFunc {
 		}
 		http.Error(w, "unknown token", http.StatusNotFound)
 	}
+}
+
+func tokenFromPath(r *http.Request) string {
+	return r.PathValue("token")
 }
 
 func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -269,4 +273,25 @@ func (s *server) handleCreateTokenWithOwner(w http.ResponseWriter, r *http.Reque
 	}
 
 	writeResponseAsJSON(w, response, 201)
+}
+
+func (s *server) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
+	token := tokenFromPath(r)
+	if token == "" {
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, codeUnauthenticated, "unauthenticated")
+		return
+	}
+
+	err := s.shortener.DeleteToken(r.Context(), token, userID)
+	if errors.Is(err, shortener.ErrNotTokenOwner) {
+		writeError(w, codeMustBeTokenOwner, "you don't own this token")
+		return
+	} else if err != nil {
+		writeError(w, codeInternalError, "internal")
+	}
 }

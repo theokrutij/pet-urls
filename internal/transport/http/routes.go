@@ -9,7 +9,7 @@ func (s *server) initializeRoutes() {
 
 	// TODO:
 	s.router.Handle("POST /api/v1/short/my", s.requiresAuthMiddleware(http.HandlerFunc(s.handleCreateTokenWithOwner)))
-	// s.router.Handle("DELETE /api/v1/short/my/{token}", s.requiresAuthMiddleware(s.handleDeleteToken))
+	s.router.Handle("DELETE /api/v1/short/my/{token}", s.requiresAuthMiddleware(http.HandlerFunc(s.handleDeleteToken)))
 
 	// auth
 	s.router.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
@@ -18,7 +18,7 @@ func (s *server) initializeRoutes() {
 	s.router.HandleFunc("POST /api/v1/auth/refresh", s.handleTokenRefresh)
 
 	//redirects
-	s.router.HandleFunc("GET /{code}", s.redirectToOriginalURL())
+	s.router.HandleFunc("GET /{token}", s.redirectToOriginalURL())
 
 	// static
 	if s.pathToStatic != "" {
