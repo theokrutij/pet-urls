@@ -19,9 +19,4 @@ func (s *server) initializeRoutes() {
 
 	//redirects
 	s.router.HandleFunc("GET /api/v1/{token}", s.handleResolveToken())
-
-	// static
-	if s.pathToStatic != "" {
-		s.router.Handle("/", http.FileServer(http.Dir(s.pathToStatic)))
-	}
 }

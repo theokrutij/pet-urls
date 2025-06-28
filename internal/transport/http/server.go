@@ -26,17 +26,15 @@ type server struct {
 	shortener shortener.Service
 	auth      auth.Service
 
-	router       *http.ServeMux
-	logger       *slog.Logger
-	pathToStatic string
+	router *http.ServeMux
+	logger *slog.Logger
 }
 
 type Config struct {
-	Debug        bool         // default=false
-	Port         int          // default=80
-	Host         string       // default=localhost
-	PathToAssets string       // default=no static
-	Logger       *slog.Logger // default=no logging
+	Debug  bool         // default=false
+	Port   int          // default=80
+	Host   string       // default=localhost
+	Logger *slog.Logger // default=no logging
 }
 
 func NewServer(shortener shortener.Service, auth auth.Service, config Config) (*server, error) {

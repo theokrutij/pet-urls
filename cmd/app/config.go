@@ -23,7 +23,6 @@ func loadConfig() (AppConfig, error) {
 
 	// ENV variables
 	portEnv := os.Getenv("PORT")
-	staticPath := os.Getenv("STATIC_PATH")
 	postgresDSN := os.Getenv("POSTGRES_DSN")
 	redisURL := os.Getenv("REDIS_URL")
 
@@ -34,10 +33,9 @@ func loadConfig() (AppConfig, error) {
 
 	return AppConfig{
 		serverConfig: &httpx.Config{
-			Debug:        *debug,
-			Port:         port,
-			PathToAssets: staticPath,
-			Logger:       slog.Default(), // TODO: add log setup
+			Debug:  *debug,
+			Port:   port,
+			Logger: slog.Default(), // TODO: add log setup
 		},
 		dbConfig: &postgres.Config{
 			DSN: postgresDSN,
