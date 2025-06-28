@@ -244,3 +244,5 @@ func (a *auth) Authenticate(ctx context.Context, tokenCandidate []byte) (UserID,
 
 	return userID, nil
 }
+
+func (a *auth) RefreshTokenTTL() time.Duration { return a.refreshTokenTTL }

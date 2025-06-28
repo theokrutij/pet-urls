@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"time"
 )
 
 type Service interface {
@@ -49,4 +50,7 @@ type Service interface {
 	// TODO:
 	// ChangePassword (probably requires email capabilities)
 	// DeleteUser
+
+	// RefreshTokenTTL returns the refresh token TTL.
+	RefreshTokenTTL() time.Duration
 }
