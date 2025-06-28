@@ -84,7 +84,7 @@ func applyConfig(a *auth, c Config) *auth {
 
 func (a *auth) HealthCheck(ctx context.Context) error {
 	if err := a.repo.HealthCheck(ctx); err != nil {
-		return fmt.Errorf("auth, repo healthcheck: %w", err)
+		return fmt.Errorf("auth, repo healthcheck: internal") // don't leak
 	}
 
 	return nil
@@ -102,7 +102,7 @@ func (a *auth) Register(ctx context.Context, login, password string) (RefreshTok
 	if isNotUniqueError(err) {
 		return nil, nil, fmt.Errorf("auth, saving user: %w", ErrLoginNotUnique)
 	} else if err != nil {
-		return nil, nil, fmt.Errorf("auth, saving user: %w", err) // TODO: replace bare err with default stub ErrInternal to avoid leaking data?
+		return nil, nil, fmt.Errorf("auth, saving user: internal") // don't leak
 	}
 
 	refreshToken, err := a.issueRefreshToken(ctx, userID)
@@ -132,7 +132,7 @@ func (a *auth) Login(ctx context.Context, login, password string) (RefreshToken,
 	if isNotFoundError(err) {
 		return nil, nil, fmt.Errorf("auth, fetching user from repo: %w", ErrLoginDoesNotExist)
 	} else if err != nil {
-		return nil, nil, fmt.Errorf("auth, fetching user from repo: %w", err)
+		return nil, nil, fmt.Errorf("auth, fetching user from repo: internal") // don't leak
 	}
 
 	if !passwordMatchesHash(password, user.PasswordHash) {
@@ -176,7 +176,7 @@ func (a *auth) issueRefreshToken(ctx context.Context, userID UserID) (RefreshTok
 		ExpiresAt: time.Now().UTC().Add(a.refreshTokenTTL),
 	}
 	if err := a.repo.SaveRefreshToken(ctx, tokenModel); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("saving new refresh token to repo")
 	}
 
 	return refreshToken, nil
@@ -189,7 +189,7 @@ func (a *auth) issueAccessToken(userID UserID) (AccessToken, error) {
 	}
 	accessToken, err := generateJWT(claims, a.keyFunc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("generating JWT")
 	}
 
 	return accessToken, nil
@@ -204,7 +204,7 @@ func (a *auth) Logout(ctx context.Context, tokenCandidate []byte) error {
 	tokenHash := hashToken(tokenCandidate)
 	err := a.repo.DeleteRefreshToken(ctx, tokenHash)
 	if err != nil {
-		return fmt.Errorf("auth, deleting refresh token: %w", err)
+		return fmt.Errorf("auth, deleting refresh token: internal") // don't leak
 	}
 
 	return nil
@@ -217,7 +217,7 @@ func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken,
 	if isNotFoundError(err) {
 		return nil, fmt.Errorf("auth, fetching refresh token: %w", ErrInvalidToken)
 	} else if err != nil {
-		return nil, fmt.Errorf("auth, fetching refresh token: %w", err)
+		return nil, fmt.Errorf("auth, fetching refresh token: internal") // don't leak
 	}
 
 	if refreshToken.RevokedAt != nil {
@@ -238,8 +238,10 @@ func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken,
 
 func (a *auth) Authenticate(ctx context.Context, tokenCandidate []byte) (UserID, error) {
 	userID, err := parseJWT(string(tokenCandidate), a.keyFunc) // might return ErrTokenExpired
-	if err != nil {
+	if errors.Is(err, ErrTokenExpired) {
 		return nil, fmt.Errorf("auth, validating access token: %w", err)
+	} else if err != nil {
+		return nil, fmt.Errorf("auth, validating access token: internal") // don't leak
 	}
 
 	return userID, nil
