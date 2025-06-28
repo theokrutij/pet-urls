@@ -62,7 +62,7 @@ func (s *server) handleGenerateURLToken(w http.ResponseWriter, r *http.Request) 
 
 // TODO:
 //   - figure out client side caching: appropriate headers and status code for that?
-func (s *server) redirectToOriginalURL() http.HandlerFunc {
+func (s *server) handleResolveToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := tokenFromPath(r)
 		if token == "" {
@@ -70,11 +70,13 @@ func (s *server) redirectToOriginalURL() http.HandlerFunc {
 		}
 
 		originalURL, err := s.shortener.ResolveToken(r.Context(), token)
-		if err == nil {
-			http.Redirect(w, r, string(originalURL), http.StatusMovedPermanently)
+		if err != nil {
+			http.Error(w, "unknown token", http.StatusNotFound)
 			return
 		}
-		http.Error(w, "unknown token", http.StatusNotFound)
+
+		w.Header().Set("Cache-Control", "no-store")
+		http.Redirect(w, r, string(originalURL), http.StatusMovedPermanently)
 	}
 }
 

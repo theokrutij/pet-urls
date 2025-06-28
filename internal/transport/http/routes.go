@@ -18,7 +18,7 @@ func (s *server) initializeRoutes() {
 	s.router.HandleFunc("POST /api/v1/auth/refresh", s.handleTokenRefresh)
 
 	//redirects
-	s.router.HandleFunc("GET /{token}", s.redirectToOriginalURL())
+	s.router.HandleFunc("GET /api/v1/{token}", s.handleResolveToken())
 
 	// static
 	if s.pathToStatic != "" {
