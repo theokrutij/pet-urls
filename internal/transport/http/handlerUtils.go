@@ -39,16 +39,15 @@ func writeResponseAsJSON(w http.ResponseWriter, response any, statusCode int) {
 
 type apiErrorCode string
 
-// TODO sort codes by semantic categories
 const (
-	codeInvalidRequest     apiErrorCode = "INVALID_REQUEST"
-	codeInvalidParameter   apiErrorCode = "INVALID_PARAMETER"
-	codeInternalError      apiErrorCode = "INTERNAL_ERROR"
-	codeWrongContentType   apiErrorCode = "WRONG_CONTENT_TYPE"
-	codeRequestTimeout     apiErrorCode = "REQUEST_TIMED_OUT"
-	codeInvalidCredentials apiErrorCode = "INVALID_CREDENTIALS"
-	codeUnauthenticated    apiErrorCode = "UNAUTHENTICATED"
-	codeMustBeTokenOwner   apiErrorCode = "MUST_BE_TOKEN_OWNER"
+	codeInvalidRequest   apiErrorCode = "INVALID_REQUEST"
+	codeInvalidParameter apiErrorCode = "INVALID_PARAMETER"
+
+	codeUnauthenticated apiErrorCode = "UNAUTHENTICATED"
+
+	codeMustBeOwner apiErrorCode = "MUST_BE_OWNER"
+
+	codeInternalError apiErrorCode = "INTERNAL_ERROR"
 )
 
 func writeError(w http.ResponseWriter, apiCode apiErrorCode, message string) {
@@ -65,8 +64,10 @@ func writeError(w http.ResponseWriter, apiCode apiErrorCode, message string) {
 
 func apiCodeToHTTPStatusCode(code apiErrorCode) int {
 	switch code {
-	case codeInvalidCredentials, codeUnauthenticated:
+	case codeUnauthenticated:
 		return 401
+	case codeMustBeOwner:
+		return 403
 	case codeInternalError:
 		return 500
 	default:

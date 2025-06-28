@@ -105,7 +105,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	refreshToken, accessToken, err := s.auth.Login(r.Context(), login, password)
 	if errors.Is(err, auth.ErrLoginDoesNotExist) || errors.Is(err, auth.ErrPasswordDoesNotMatch) {
-		writeError(w, codeInvalidCredentials, "invalid credentials")
+		writeError(w, codeUnauthenticated, "invalid credentials")
 		return
 	} else if err != nil {
 		writeError(w, codeInternalError, "internal")
@@ -285,7 +285,7 @@ func (s *server) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
 
 	err := s.shortener.DeleteToken(r.Context(), token, userID)
 	if errors.Is(err, shortener.ErrNotTokenOwner) {
-		writeError(w, codeMustBeTokenOwner, "you don't own this token")
+		writeError(w, codeMustBeOwner, "you don't own this token")
 		return
 	} else if err != nil {
 		writeError(w, codeInternalError, "internal")
