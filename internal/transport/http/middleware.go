@@ -36,10 +36,9 @@ func (s *server) loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// TODO: http.TimeoutHandler
-func timeoutMiddleware(next http.Handler) http.Handler {
+func timeoutMiddleware(next http.Handler, timeout time.Duration) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 
 		next.ServeHTTP(w, r.WithContext(ctx))

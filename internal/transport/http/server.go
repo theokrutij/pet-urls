@@ -11,6 +11,14 @@ import (
 	"github.com/theokrutij/pet-urls/internal/services/shortener"
 )
 
+const (
+	readHeaderTimeout = 2 * time.Second
+	readTimeout       = 5 * time.Second
+	writeTimeout      = 10 * time.Second
+	idleTimeout       = 60 * time.Second
+	handleTimeout     = 2 * time.Second
+)
+
 type server struct {
 	s     *http.Server
 	debug bool
@@ -52,13 +60,18 @@ func NewServer(shortener shortener.Service, auth auth.Service, config Config) (*
 func applyConfig(server *server, config Config) *server {
 	// debug
 	server.debug = config.Debug
+
 	if !server.debug {
-		server.s.Handler = timeoutMiddleware(server.s.Handler)
-		server.s.MaxHeaderBytes = 1 << 20 //1MB
-		server.s.ReadHeaderTimeout = 2 * time.Second
-		server.s.ReadTimeout = 5 * time.Second
-		server.s.WriteTimeout = 10 * time.Second
-		server.s.IdleTimeout = 60 * time.Second
+		// timeouts
+		server.s.ReadHeaderTimeout = readHeaderTimeout
+		server.s.ReadTimeout = readTimeout
+		server.s.WriteTimeout = writeTimeout
+		server.s.IdleTimeout = idleTimeout
+
+		server.s.Handler = timeoutMiddleware(server.s.Handler, handleTimeout)
+
+		// hard timeout in case handler doesn't honor context properly
+		server.s.Handler = http.TimeoutHandler(server.s.Handler, handleTimeout+10*time.Millisecond, "Server timeout")
 	}
 
 	// address
