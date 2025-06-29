@@ -8,10 +8,10 @@ import (
 )
 
 type shortenerRepository struct {
-	p *postgresConnectionPool
+	p Postgres
 }
 
-func NewShortenerRepository(p *postgresConnectionPool) *shortenerRepository {
+func NewShortenerRepository(p Postgres) *shortenerRepository {
 	return &shortenerRepository{p}
 }
 

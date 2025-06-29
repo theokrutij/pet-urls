@@ -8,7 +8,7 @@ import (
 )
 
 type authRepository struct {
-	p *postgresConnectionPool
+	p Postgres
 }
 
 type notUniqueError struct {
@@ -27,7 +27,7 @@ func (n notUniqueError) NotUnique() bool {
 	return true
 }
 
-func NewAuthRepository(p *postgresConnectionPool) *authRepository {
+func NewAuthRepository(p Postgres) *authRepository {
 	return &authRepository{p}
 }
 

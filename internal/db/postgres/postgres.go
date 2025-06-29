@@ -17,6 +17,12 @@ const (
 	delay       = 100 * time.Millisecond
 )
 
+type Postgres interface {
+	Ping(ctx context.Context) error
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
 type postgresConnectionPool struct {
 	*pgxpool.Pool
 }
@@ -25,7 +31,7 @@ type Config struct {
 	DSN string
 }
 
-func New(ctx context.Context, config *Config) (*postgresConnectionPool, error) {
+func New(ctx context.Context, config *Config) (Postgres, error) {
 	pgxConfig, err := pgxpool.ParseConfig(config.DSN)
 	if err != nil {
 		return nil, err
