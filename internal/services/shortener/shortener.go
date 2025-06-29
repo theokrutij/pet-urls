@@ -61,21 +61,27 @@ func New(repo repository, cache cache, config Config) Service {
 	return s
 }
 
+const (
+	defaultTokenTTL    = 1 * time.Hour
+	defaultCacheTTL    = 10 * time.Minute
+	defaultTokenLength = 8
+)
+
 func applyConfig(s *shortener, c Config) *shortener {
 	if c.CacheTTL == 0 {
-		s.cacheTTL = 10 * time.Minute
+		s.cacheTTL = defaultCacheTTL
 	} else {
 		s.cacheTTL = c.CacheTTL
 	}
 
 	if c.TokenTTL == 0 {
-		s.tokenTTL = 1 * time.Hour
+		s.tokenTTL = defaultTokenTTL
 	} else {
 		s.tokenTTL = c.TokenTTL
 	}
 
 	if c.TokenDecodedLength == 0 {
-		s.tokenDecodedLength = 8
+		s.tokenDecodedLength = defaultTokenLength
 	} else {
 		s.tokenDecodedLength = c.TokenDecodedLength
 	}
