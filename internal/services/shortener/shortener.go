@@ -176,11 +176,11 @@ func (s *shortener) generateRandomBase58() (Token, error) {
 	return Token(tokenStr), nil
 }
 
-type notUniqueError interface {
-	NotUnique() bool
-}
-
 func isNotUniqueError(err error) bool {
+	type notUniqueError interface {
+		NotUnique() bool
+	}
+
 	var nuErr notUniqueError
 	return errors.As(err, &nuErr) && nuErr.NotUnique()
 }
@@ -214,12 +214,12 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 	return token.URL, nil
 }
 
-type NotFoundError interface {
-	NotFound() bool
-}
-
 func isNotFoundError(err error) bool {
-	var nfErr NotFoundError
+	type notFoundError interface {
+		NotFound() bool
+	}
+
+	var nfErr notFoundError
 	return errors.As(err, &nfErr) && nfErr.NotFound()
 }
 
