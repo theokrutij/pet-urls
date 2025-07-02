@@ -1,29 +1,28 @@
 run-app:
 	go run ./cmd/app
 
-COMPOSE_FILE := docker/compose.dev.yml
-VOLUME_NAME := $(shell docker volume ls -q --filter name=postgres_data)
-
+DEV_COMPOSE_FILE := docker/compose.dev.yaml
+VOLUME_NAME := postgres_data
 
 compose-up:
-	docker compose -f $(COMPOSE_FILE) up
+	docker compose -f $(DEV_COMPOSE_FILE) up
 
 compose-down:
-	docker compose -f $(COMPOSE_FILE) down
+	docker compose -f $(DEV_COMPOSE_FILE) down
 
 compose-restart: compose-down compose-up
 
 compose-logs:
-	docker compose -f $(COMPOSE_FILE) logs -f
+	docker compose -f $(DEV_COMPOSE_FILE) logs -f
 
 compose-ps:
-	docker compose -f $(COMPOSE_FILE) ps
+	docker compose -f $(DEV_COMPOSE_FILE) ps
 
 compose-build:
-	docker compose -f $(COMPOSE_FILE) build
+	docker compose -f $(DEV_COMPOSE_FILE) build
 
 compose-exec:
-	docker compose -f $(COMPOSE_FILE) exec db bash
+	docker compose -f $(DEV_COMPOSE_FILE) exec db bash
 
 volume-rm:
 	@if [ -n "$(VOLUME_NAME)" ]; then \
@@ -64,3 +63,10 @@ migrate-force:
 # Show current migration version
 migrate-version:
 	go run cmd/migrate/main.go version -dsn "$(DB_DSN)" -dir "$(MIGRATIONS_DIR)"
+
+# Testing 
+TEST_COMPOSE_FILE := docker/compose.test.yaml
+
+run-integration-tests:
+	@docker compose -f $(TEST_COMPOSE_FILE) up --build test-runner && \
+	docker compose -f $(TEST_COMPOSE_FILE) down -t 1
