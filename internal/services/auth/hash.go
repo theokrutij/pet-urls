@@ -16,6 +16,6 @@ func passwordMatchesHash(password string, hash PasswordHash) bool {
 }
 
 func hashToken(token []byte) TokenHash {
-	hash := sha256.Sum256(token) // TODO: read about it, is hash function a bijection? What does hashing protect from?
+	hash := sha256.Sum256(token)
 	return hash[:]
 }

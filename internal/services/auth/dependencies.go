@@ -30,7 +30,7 @@ type repository interface {
 
 		If tokenHash does not exist, isNotFoundError(err) = true
 	*/
-	GetRefreshToken(ctx context.Context, tokenHash TokenHash) (RefreshTokenInRepo, error) // TODO rename to SaveRefreshToken
+	GetRefreshToken(ctx context.Context, tokenHash TokenHash) (RefreshTokenInRepo, error)
 	/*
 		Deletes refresh token
 

@@ -60,8 +60,6 @@ func (s *server) handleGenerateURLToken(w http.ResponseWriter, r *http.Request) 
 	writeResponseAsJSON(w, response, 201)
 }
 
-// TODO:
-//   - figure out client side caching: appropriate headers and status code for that?
 func (s *server) handleResolveToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := tokenFromPath(r)
@@ -144,7 +142,7 @@ func (s *server) setRefreshTokenCookie(w http.ResponseWriter, token []byte) {
 	http.SetCookie(w, &cookie)
 }
 
-func (s *server) handleRegistration(w http.ResponseWriter, r *http.Request) { // TODO: do we need config?
+func (s *server) handleRegistration(w http.ResponseWriter, r *http.Request) {
 	type requestSchema struct {
 		Login    string `json:"login"`
 		Password string `json:"password"`
