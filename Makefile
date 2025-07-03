@@ -1,5 +1,5 @@
 run-app:
-	go run ./cmd/app
+	go run ./cmd/app --debug
 
 DEV_COMPOSE_FILE := docker/compose.dev.yaml
 VOLUME_NAME := postgres_data
