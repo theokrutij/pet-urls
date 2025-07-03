@@ -1,8 +1,8 @@
 package main
 
 import (
-	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -18,28 +18,35 @@ type AppConfig struct {
 	cacheConfig  *cache.Config
 }
 
+// -------- ENV variable keys -------
+const (
+	EnvKeyPORT        = "PORT"
+	EnvKeyPostgresDSN = "POSTGRES_DSN"
+	EnvKeyRedisURL    = "REDIS_URL"
+)
+
 func loadConfig() (*AppConfig, error) {
 	// CLI flags
 	debug := flag.Bool("debug", false, "Run in debug mode")
 	flag.Parse()
 
 	// ENV variables
-	portEnv, ok := os.LookupEnv("PORT")
+	portEnv, ok := os.LookupEnv(EnvKeyPORT)
 	if !ok {
-		return nil, errors.New("PORT env variable missing")
+		return nil, fmt.Errorf("%s env key missing", EnvKeyPORT)
 	}
-	postgresDSN, ok := os.LookupEnv("POSTGRES_DSN")
+	postgresDSN, ok := os.LookupEnv(EnvKeyPostgresDSN)
 	if !ok {
-		return nil, errors.New("POSTGRES_DSN env variable missing")
+		return nil, fmt.Errorf("%s env key missing", EnvKeyPostgresDSN)
 	}
-	redisURL, ok := os.LookupEnv("REDIS_URL")
+	redisURL, ok := os.LookupEnv(EnvKeyRedisURL)
 	if !ok {
-		return nil, errors.New("REDIS_URL variable missing")
+		return nil, fmt.Errorf("%s env key missing", EnvKeyRedisURL)
 	}
 
 	port, err := strconv.Atoi(portEnv)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s env key must be integer", EnvKeyPORT)
 	}
 
 	return &AppConfig{
