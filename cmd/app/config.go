@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log/slog"
 	"os"
@@ -17,21 +18,31 @@ type AppConfig struct {
 	cacheConfig  *cache.Config
 }
 
-func loadConfig() (AppConfig, error) {
+func loadConfig() (*AppConfig, error) {
 	// CLI flags
 	debug := flag.Bool("debug", false, "Run in debug mode")
+	flag.Parse()
 
 	// ENV variables
-	portEnv := os.Getenv("PORT")
-	postgresDSN := os.Getenv("POSTGRES_DSN")
-	redisURL := os.Getenv("REDIS_URL")
+	portEnv, ok := os.LookupEnv("PORT")
+	if !ok {
+		return nil, errors.New("PORT env variable missing")
+	}
+	postgresDSN, ok := os.LookupEnv("POSTGRES_DSN")
+	if !ok {
+		return nil, errors.New("POSTGRES_DSN env variable missing")
+	}
+	redisURL, ok := os.LookupEnv("REDIS_URL")
+	if !ok {
+		return nil, errors.New("REDIS_URL variable missing")
+	}
 
 	port, err := strconv.Atoi(portEnv)
 	if err != nil {
-		return AppConfig{}, err
+		return nil, err
 	}
 
-	return AppConfig{
+	return &AppConfig{
 		serverConfig: &httpx.Config{
 			Debug:  *debug,
 			Port:   port,
