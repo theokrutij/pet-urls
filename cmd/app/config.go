@@ -23,6 +23,7 @@ const (
 	EnvKeyPORT        = "PORT"
 	EnvKeyPostgresDSN = "POSTGRES_DSN"
 	EnvKeyRedisURL    = "REDIS_URL"
+	EnvKeyJwtKey      = "JWT_KEY"
 )
 
 func loadConfig() (*AppConfig, error) {
@@ -62,4 +63,12 @@ func loadConfig() (*AppConfig, error) {
 			Addr: redisURL,
 		},
 	}, nil
+}
+
+func loadJWTKey() ([]byte, error) {
+	jwtKey, ok := os.LookupEnv(EnvKeyJwtKey)
+	if !ok {
+		return nil, fmt.Errorf("%s env key missing", EnvKeyJwtKey)
+	}
+	return []byte(jwtKey), nil
 }

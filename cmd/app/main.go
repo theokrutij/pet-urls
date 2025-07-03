@@ -39,6 +39,12 @@ func run() error {
 	cacheInstance := cache.New(config.cacheConfig) // Replace with actual cache initialization if needed
 
 	// Initialize the HTTP server with services and config
+
+	jwtKey, err := loadJWTKey()
+	if err != nil {
+		return err
+	}
+
 	server, err := httpx.NewServer(
 		shortener.New(
 			postgres.NewShortenerRepository(dbInstance),
@@ -48,7 +54,7 @@ func run() error {
 		auth.New(
 			postgres.NewAuthRepository(dbInstance),
 			auth.Config{},
-			func() []byte { return []byte("abc") },
+			func() []byte { return jwtKey },
 		),
 		*config.serverConfig,
 	)
