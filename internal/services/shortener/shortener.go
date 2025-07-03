@@ -12,7 +12,14 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 )
 
-// Sentinel errors
+// ------- Constants and sentinel errors -------
+
+const (
+	defaultTokenTTL    = 1 * time.Hour
+	defaultCacheTTL    = 10 * time.Minute
+	defaultTokenLength = 8
+)
+
 var (
 	ErrInvalidURL        = errors.New("invalid URL")
 	ErrTokenExpired      = errors.New("token expired")
@@ -21,6 +28,8 @@ var (
 	ErrInvalidToken      = errors.New("invalid token")
 	ErrNotTokenOwner     = errors.New("requesting user is not the token owner")
 )
+
+// ------- Types -------
 
 type Token string
 type URL string
@@ -55,17 +64,13 @@ type shortener struct {
 	tokenDecodedLength int
 }
 
+// ------- Constructor --------
+
 func New(repo repository, cache cache, config Config) Service {
 	s := &shortener{repo: repo, cache: cache}
 	s = applyConfig(s, config)
 	return s
 }
-
-const (
-	defaultTokenTTL    = 1 * time.Hour
-	defaultCacheTTL    = 10 * time.Minute
-	defaultTokenLength = 8
-)
 
 func applyConfig(s *shortener, c Config) *shortener {
 	if c.CacheTTL == 0 {
@@ -89,6 +94,9 @@ func applyConfig(s *shortener, c Config) *shortener {
 	return s
 }
 
+// ------- Public methods -------
+
+// HealthCheck implements Service.HealthCheck.
 func (s *shortener) HealthCheck(ctx context.Context) error {
 	if err := s.repo.HealthCheck(ctx); err != nil {
 		return fmt.Errorf("shortener, repo healthcheck: %w", err)
@@ -100,11 +108,43 @@ func (s *shortener) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
+// GenerateToken implements Service.GenerateToken
 func (s *shortener) GenerateToken(ctx context.Context, rawURL string) (URLToken, error) {
 	createTokenInput := CreateTokenInput{URL: rawURL}
 	return s.createToken(ctx, createTokenInput)
 }
 
+// ResolveToken implements Service.ResolveToken
+func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, error) {
+	// Check the cache first
+	// TODO: log cache failure
+	if token, err := s.cache.GetToken(ctx, tokenStr); err == nil {
+		if token.ExpiresAt.Before(time.Now()) {
+			return "", fmt.Errorf("shortener, fetching token from cache: %w, token=%s", ErrTokenExpired, token.Token)
+		}
+		return token.URL, nil
+	}
+
+	// If not found in cache, retrieve from the database
+	token, err := s.repo.GetToken(ctx, tokenStr)
+	if isNotFoundError(err) {
+		return "", fmt.Errorf("shortener, fetching token from db: %w | token=%s", ErrTokenDoesNotExist, token.Token)
+	} else if err != nil {
+		return "", fmt.Errorf("shortener, fetching token from db: %w | token=%s", err, token.Token)
+	}
+
+	if token.ExpiresAt.Before(time.Now()) {
+		return "", fmt.Errorf("shortener.GetOriginalURL: %w", ErrTokenExpired)
+	}
+
+	// Update cache
+	// TODO: handle cache failure
+	s.cache.SaveToken(ctx, token, s.cacheTTL)
+
+	return token.URL, nil
+}
+
+// CreateTokenWithOwner implements Service.CreateTokenWithOwner
 func (s *shortener) CreateTokenWithOwner(ctx context.Context, input CreateTokenInput) (URLToken, error) {
 	var output URLToken
 	if input.OwnerID == nil {
@@ -119,6 +159,35 @@ func (s *shortener) CreateTokenWithOwner(ctx context.Context, input CreateTokenI
 	return token, err
 }
 
+// DeleteToken implements Service.DeleteTokenWithOwner
+func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, userID []byte) error {
+	token, err := s.repo.GetToken(ctx, tokenStr)
+	if isNotFoundError(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("shortener, fetching token from db for deletion: %w", err)
+	}
+	if !bytes.Equal(token.OwnerID, userID) {
+		return fmt.Errorf("shortener, deleting token: %w", ErrNotTokenOwner)
+	}
+
+	// TODO: handle cache failure
+	s.cache.DeleteToken(ctx, tokenStr)
+	return s.repo.DeleteToken(ctx, tokenStr)
+}
+
+// ------- Internal helper methods -------
+
+// createToken validates input fields, sets default values if needed, and
+// persists token in repo and cache.
+//
+// Validation rules:
+//   - input.URL must be a valid HTTP URL (missing scheme is interpreted as http://).
+//   - input.Token must not contain more than 64 runes
+//
+// Default values:
+//   - If input.Token is an empty string, a random base58 encoded byte sequence is used as token.
+//   - If input.TTL is zero or negative, a default TTL is set
 func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (URLToken, error) {
 	var output URLToken
 
@@ -176,6 +245,8 @@ func (s *shortener) generateRandomBase58() (Token, error) {
 	return Token(tokenStr), nil
 }
 
+// ------- Error type checkers -------
+
 func isNotUniqueError(err error) bool {
 	type notUniqueError interface {
 		NotUnique() bool
@@ -185,35 +256,6 @@ func isNotUniqueError(err error) bool {
 	return errors.As(err, &nuErr) && nuErr.NotUnique()
 }
 
-func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, error) {
-	// Check the cache first
-	// TODO: log cache failure
-	if token, err := s.cache.GetToken(ctx, tokenStr); err == nil {
-		if token.ExpiresAt.Before(time.Now()) {
-			return "", fmt.Errorf("shortener, fetching token from cache: %w, token=%s", ErrTokenExpired, token.Token)
-		}
-		return token.URL, nil
-	}
-
-	// If not found in cache, retrieve from the database
-	token, err := s.repo.GetToken(ctx, tokenStr)
-	if isNotFoundError(err) {
-		return "", fmt.Errorf("shortener, fetching token from db: %w | token=%s", ErrTokenDoesNotExist, token.Token)
-	} else if err != nil {
-		return "", fmt.Errorf("shortener, fetching token from db: %w | token=%s", err, token.Token)
-	}
-
-	if token.ExpiresAt.Before(time.Now()) {
-		return "", fmt.Errorf("shortener.GetOriginalURL: %w", ErrTokenExpired)
-	}
-
-	// Update cache
-	// TODO: handle cache failure
-	s.cache.SaveToken(ctx, token, s.cacheTTL)
-
-	return token.URL, nil
-}
-
 func isNotFoundError(err error) bool {
 	type notFoundError interface {
 		NotFound() bool
@@ -221,20 +263,4 @@ func isNotFoundError(err error) bool {
 
 	var nfErr notFoundError
 	return errors.As(err, &nfErr) && nfErr.NotFound()
-}
-
-func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, userID []byte) error {
-	token, err := s.repo.GetToken(ctx, tokenStr)
-	if isNotFoundError(err) {
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("shortener, fetching token from db for deletion: %w", err)
-	}
-	if !bytes.Equal(token.OwnerID, userID) {
-		return fmt.Errorf("shortener, deleting token: %w", ErrNotTokenOwner)
-	}
-
-	// TODO: handle cache failure
-	s.cache.DeleteToken(ctx, tokenStr)
-	return s.repo.DeleteToken(ctx, tokenStr)
 }
