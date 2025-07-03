@@ -22,9 +22,15 @@ type repository interface {
 }
 
 type cache interface {
-	// TODO: docs
+	// HealthCheck checks that cache is available.
+	// If healthy, returns nil.
 	HealthCheck(ctx context.Context) error
+	// SaveToken saves token to cache with provided cache key TTL.
+	//
+	// NOTE: cache key TTL does not correlate with token's inner TTL.
 	SaveToken(ctx context.Context, token URLToken, ttl time.Duration) error
+	// GetToken fetches token from cache.
 	GetToken(ctx context.Context, tokenStr string) (URLToken, error)
+	// DeleteToken deletes token from cache.
 	DeleteToken(ctx context.Context, tokenStr string) error
 }
