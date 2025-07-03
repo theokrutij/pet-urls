@@ -202,9 +202,9 @@ type claims struct {
 
 func (a *auth) Logout(ctx context.Context, tokenCandidate []byte) error {
 	tokenHash := hashToken(tokenCandidate)
-	err := a.repo.DeleteRefreshToken(ctx, tokenHash)
+	err := a.repo.RevokeRefreshToken(ctx, tokenHash)
 	if err != nil {
-		return fmt.Errorf("auth, deleting refresh token: internal") // don't leak
+		return fmt.Errorf("auth, revoking refresh token: internal")
 	}
 
 	return nil

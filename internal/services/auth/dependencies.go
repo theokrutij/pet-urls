@@ -36,5 +36,5 @@ type repository interface {
 
 		If tokenHash does not exist, returns nil error
 	*/
-	DeleteRefreshToken(ctx context.Context, tokenHash TokenHash) error
+	RevokeRefreshToken(ctx context.Context, tokenHash TokenHash) error //
 }

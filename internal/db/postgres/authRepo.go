@@ -110,10 +110,11 @@ func (a *authRepository) GetRefreshToken(ctx context.Context, tokenHash auth.Tok
 	return token, nil
 }
 
-func (a *authRepository) DeleteRefreshToken(ctx context.Context, tokenHash auth.TokenHash) error {
+func (a *authRepository) RevokeRefreshToken(ctx context.Context, tokenHash auth.TokenHash) error {
 	const query = `
-		DELETE FROM refresh_tokens
-		WHERE token_hash = $1
+		UPDATE refresh_tokens
+		SET revoked_at = NOW()
+		WHERE token_hash = $1 AND revoked_at IS NULL;
 	`
 	return withRetry(ctx, func(ctx context.Context) error {
 		_, err := a.p.Exec(ctx, query, tokenHash)
