@@ -74,7 +74,7 @@ func (s *server) handleResolveToken() http.HandlerFunc {
 		}
 
 		w.Header().Set("Cache-Control", "no-store")
-		http.Redirect(w, r, string(originalURL), http.StatusMovedPermanently)
+		http.Redirect(w, r, string(originalURL), http.StatusTemporaryRedirect)
 	}
 }
 
