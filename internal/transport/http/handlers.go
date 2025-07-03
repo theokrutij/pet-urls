@@ -142,6 +142,16 @@ func (s *server) setRefreshTokenCookie(w http.ResponseWriter, token []byte) {
 	http.SetCookie(w, &cookie)
 }
 
+func (s *server) expireRefreshTokenCookie(w http.ResponseWriter) {
+	cookie := http.Cookie{
+		Name:   refreshTokenCookieName,
+		Value:  "",
+		Path:   "/api",
+		MaxAge: -1,
+	}
+	http.SetCookie(w, &cookie)
+}
+
 func (s *server) handleRegistration(w http.ResponseWriter, r *http.Request) {
 	type requestSchema struct {
 		Login    string `json:"login"`
@@ -216,7 +226,10 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	err = s.auth.Logout(r.Context(), refreshToken)
 	if err != nil {
 		writeError(w, codeInternalError, "internal")
+		return
 	}
+
+	s.expireRefreshTokenCookie(w)
 }
 
 func (s *server) handleCreateTokenWithOwner(w http.ResponseWriter, r *http.Request) {
