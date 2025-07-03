@@ -185,7 +185,7 @@ func (a *auth) issueRefreshToken(ctx context.Context, userID UserID) (RefreshTok
 func (a *auth) issueAccessToken(userID UserID) (AccessToken, error) {
 	claims := claims{
 		UserID:    userID,
-		ExpiresAt: time.Now().UTC().Add(a.accessTokenTTL), // TODO: check timezone logic in time package and in jwt package
+		ExpiresAt: time.Now().Add(a.accessTokenTTL),
 	}
 	accessToken, err := generateJWT(claims, a.keyFunc)
 	if err != nil {
