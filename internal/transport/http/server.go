@@ -12,11 +12,15 @@ import (
 )
 
 const (
+	// timeouts
 	readHeaderTimeout = 2 * time.Second
 	readTimeout       = 5 * time.Second
 	writeTimeout      = 10 * time.Second
 	idleTimeout       = 60 * time.Second
 	handleTimeout     = 2 * time.Second
+
+	// request size limit
+	maxBodySizeBytes = 1 << 20 // 1 mb
 )
 
 type server struct {
@@ -70,6 +74,9 @@ func applyConfig(server *server, config Config) *server {
 
 		// hard timeout in case handler doesn't honor context properly
 		server.s.Handler = http.TimeoutHandler(server.s.Handler, handleTimeout+10*time.Millisecond, "Server timeout")
+
+		// body size limit
+		server.s.Handler = maxBodyMiddleware(server.s.Handler)
 	}
 
 	// address

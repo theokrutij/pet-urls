@@ -86,4 +86,12 @@ func tokenFromHeader(r *http.Request) (string, error) {
 	return token, nil
 }
 
-//TODO: max body middleware
+func maxBodyMiddleware(next http.Handler) http.Handler {
+	f := func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodySizeBytes)
+
+		next.ServeHTTP(w, r)
+	}
+
+	return http.HandlerFunc(f)
+}
