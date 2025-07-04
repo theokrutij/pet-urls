@@ -36,7 +36,9 @@ type Service interface {
 		Issues an access token for user sesion represented by the refreshToken.
 
 		If successful, returns accessToken.
-		If refreshToken is invalid, err.IsInvalidInput() = true.
+		If refreshToken is invalid, returns ErrInvalidToken.
+		If token was revoked, returns ErrTokenWasRevoked.
+		If token expired, returns ErrTokenExpired.
 	*/
 	Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken, error)
 
@@ -44,13 +46,14 @@ type Service interface {
 		Authenticates user with accessToken.
 
 		If accessToken was issued by a user session that is active, returns associated userID.
-		If accessToken is expired, err.IsExpired() = true.
+		If accessToken is expired, returns ErrTokenExpired.
 	*/
 	Authenticate(ctx context.Context, tokenCandidate []byte) (userID UserID, err error)
-	// TODO:
-	// ChangePassword (probably requires email capabilities)
-	// DeleteUser
 
 	// RefreshTokenTTL returns the refresh token TTL.
 	RefreshTokenTTL() time.Duration
+
+	// TODO:
+	// ChangePassword (probably requires email capabilities)
+	// DeleteUser
 }
