@@ -45,7 +45,7 @@ type Service interface {
 		Authenticates user with accessToken.
 
 		If accessToken was issued by a user session that is active, returns associated userID.
-		If accessToken is expired, returns ErrTokenExpired.
+		If accessToken is not valid, returns ErrInvalidToken.
 	*/
 	Authenticate(ctx context.Context, tokenCandidate []byte) (userID UserID, err error)
 

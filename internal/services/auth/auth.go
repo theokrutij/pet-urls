@@ -302,11 +302,11 @@ func (a *auth) Authenticate(ctx context.Context, tokenCandidate []byte) (UserID,
 	if errors.Is(err, errJWTExpired) {
 		logger.Warn().
 			Msg("Authenticate: attempted to authenticate with expired JWT")
-		return nil, fmt.Errorf("auth, validating access token: %w", err)
+		return nil, fmt.Errorf("auth, validating access token: %w", ErrInvalidToken)
 	} else if err != nil {
 		logger.Warn().
 			Msg("Authenticate: attempted to authenticate with invalid JWT")
-		return nil, fmt.Errorf("auth, validating access token: internal")
+		return nil, fmt.Errorf("auth, validating access token: :%w", ErrInvalidToken)
 	}
 
 	logger.Info().
