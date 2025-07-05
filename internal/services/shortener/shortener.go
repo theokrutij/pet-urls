@@ -127,7 +127,7 @@ func (s *shortener) GenerateToken(ctx context.Context, rawURL string) (URLToken,
 			Str("token", string(output.Token)).
 			Str("url", string(output.URL)).
 			Time("expires_at", *output.ExpiresAt).
-			Msg("GenerateToken: completed")
+			Msg("GenerateToken: success")
 	}
 
 	return output, err
@@ -181,6 +181,15 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 			Msg("ResolveToken: failed to save token to cache")
 	}
 
+	logEvent := logger.Info().
+		Str("token", tokenStr).
+		Str("url", string(token.URL))
+	if token.OwnerID != nil {
+		logEvent.Str("ownerID", string(token.OwnerID))
+	}
+
+	logEvent.Msg("ResolveToken: success")
+
 	return token.URL, nil
 }
 
@@ -208,7 +217,7 @@ func (s *shortener) CreateTokenWithOwner(ctx context.Context, input CreateTokenI
 			Str("url", string(output.URL)).
 			Str("ownerID", string(output.OwnerID)).
 			Time("expires_at", *output.ExpiresAt).
-			Msg("CreateTokenWithOwner: completed")
+			Msg("CreateTokenWithOwner: success")
 	}
 
 	return output, err
@@ -259,7 +268,7 @@ func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, requesting
 	logger.Info().
 		Str("token", tokenStr).
 		Str("userID", string(token.OwnerID)).
-		Msg("DeleteToken: completed")
+		Msg("DeleteToken: success")
 	return nil
 }
 
@@ -384,7 +393,7 @@ func isNotFoundError(err error) bool {
 
 // ------- Context utils -------
 
-func (s shortener) loggerWithRequestID(ctx context.Context) zerolog.Logger {
+func (s *shortener) loggerWithRequestID(ctx context.Context) zerolog.Logger {
 	requestID, ok := xcontext.RequestID(ctx)
 	if !ok {
 		s.logger.Warn().Msg("no requestID in context")
