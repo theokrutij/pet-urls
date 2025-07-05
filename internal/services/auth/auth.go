@@ -99,19 +99,35 @@ func (a *auth) HealthCheck(ctx context.Context) error {
 }
 
 func (a *auth) Register(ctx context.Context, login, password string) error {
+	logger := a.loggerWithRequestID(ctx)
 	if len(login) > 64 {
+		logger.Info().
+			Str("login", login).
+			Msg("Register: login too long")
 		return fmt.Errorf("auth, registering: %w", ErrInvalidLogin)
 	}
 	passwordHash, err := hashPassword(password)
 	if err != nil {
+		logger.Info().
+			Msg("Register: invalid password")
 		return fmt.Errorf("auth, hashing password: %w", ErrInvalidPassword)
 	}
-	_, err = a.repo.SaveUser(ctx, UserInRepo{Login: login, PasswordHash: passwordHash})
+	userID, err := a.repo.SaveUser(ctx, UserInRepo{Login: login, PasswordHash: passwordHash})
 	if isNotUniqueError(err) {
+		logger.Info().
+			Str("login", login).
+			Msg("Register: login already exists")
 		return fmt.Errorf("auth, saving user: %w", ErrLoginNotUnique)
 	} else if err != nil {
+		logger.Error().
+			Str("login", login).
+			Msg("Register: failed to save use in repo")
 		return fmt.Errorf("auth, saving user: repo failure")
 	}
+
+	logger.Info().
+		Str("userID", string(userID)).
+		Msg("Register: success")
 
 	return nil
 }
@@ -127,26 +143,46 @@ func isNotUniqueError(err error) bool {
 }
 
 func (a *auth) Login(ctx context.Context, login, password string) (RefreshToken, AccessToken, error) {
+	logger := a.loggerWithRequestID(ctx)
 	user, err := a.repo.GetUser(ctx, login)
 	if isNotFoundError(err) {
+		logger.Warn().
+			Str("login", login).
+			Msg("Attempting to log in with non-existing login")
 		return nil, nil, fmt.Errorf("auth, fetching user from repo: %w", ErrInvalidCredentials)
 	} else if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("Login: failed to fetch login from repo")
 		return nil, nil, fmt.Errorf("auth, fetching user from repo failed")
 	}
 
 	if !passwordMatchesHash(password, user.PasswordHash) {
+		logger.Warn().
+			Str("login", login).
+			Msg("Attempting to log in with incorrect password")
 		return nil, nil, fmt.Errorf("auth, validating password: %w", ErrInvalidCredentials)
 	}
 
 	refreshToken, err := a.issueRefreshToken(ctx, user.ID)
 	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("Login: failed to issue refresh token")
 		return nil, nil, fmt.Errorf("auth, issuing refresh token: %w", err)
 	}
 
 	accessToken, err := a.issueAccessToken(user.ID)
 	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("Login: failed to issue access token")
 		return nil, nil, fmt.Errorf("auth, issuing access token: %w", err)
 	}
+
+	logger.Info().
+		Str("login", login).
+		Msg("Login: success")
 
 	return refreshToken, accessToken, nil
 }
@@ -200,48 +236,81 @@ type claims struct {
 }
 
 func (a *auth) Logout(ctx context.Context, tokenCandidate []byte) error {
+	logger := a.loggerWithRequestID(ctx)
 	tokenHash := hashToken(tokenCandidate)
 	err := a.repo.RevokeRefreshToken(ctx, tokenHash)
 	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("Logout: failed to revoke refresh token")
 		return fmt.Errorf("auth, revoking refresh token: internal")
 	}
+
+	logger.Info().
+		Msg("Logout: success")
 
 	return nil
 }
 
 func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken, error) {
+	logger := a.loggerWithRequestID(ctx)
+
 	tokenHash := hashToken(tokenCandidate)
 
 	refreshToken, err := a.repo.GetRefreshToken(ctx, tokenHash)
 	if isNotFoundError(err) {
+		logger.Warn().
+			Msg("Refresh: attempted to refresh access token with non-existing token")
 		return nil, fmt.Errorf("auth, fetching refresh token: %w", ErrInvalidToken)
 	} else if err != nil {
-		return nil, fmt.Errorf("auth, fetching refresh token: internal") // don't leak
+		logger.Error().
+			Err(err).
+			Msg("Refresh: failed to fetch refresh token from repo")
+		return nil, fmt.Errorf("auth, fetching refresh token failed")
 	}
 
 	if refreshToken.RevokedAt != nil {
+		logger.Warn().
+			Msg("Refresh: attempted to refresh access token with revoked token")
 		return nil, fmt.Errorf("auth, refreshing token: %w", ErrInvalidToken)
 	}
 
 	if refreshToken.ExpiresAt.Before(time.Now()) {
+		logger.Warn().
+			Msg("Refresh: attempted to refresh access token with expired token")
 		return nil, fmt.Errorf("auth, refreshing token: %w", ErrInvalidToken)
 	}
 
 	accessToken, err := a.issueAccessToken(refreshToken.UserID)
 	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("Refresh: failed to issue access token")
 		return nil, fmt.Errorf("auth, issuing access token: %w", err)
 	}
+
+	logger.Info().
+		Msg("Refresh: success")
 
 	return accessToken, nil
 }
 
 func (a *auth) Authenticate(ctx context.Context, tokenCandidate []byte) (UserID, error) {
-	userID, err := parseJWT(string(tokenCandidate), a.keyFunc) // might return ErrTokenExpired
+	logger := a.loggerWithRequestID(ctx)
+
+	userID, err := parseJWT(string(tokenCandidate), a.keyFunc)
 	if errors.Is(err, errJWTExpired) {
+		logger.Warn().
+			Msg("Authenticate: attempted to authenticate with expired JWT")
 		return nil, fmt.Errorf("auth, validating access token: %w", err)
 	} else if err != nil {
-		return nil, fmt.Errorf("auth, validating access token: internal") // don't leak
+		logger.Warn().
+			Msg("Authenticate: attempted to authenticate with invalid JWT")
+		return nil, fmt.Errorf("auth, validating access token: internal")
 	}
+
+	logger.Info().
+		Msg("Authenticate: success")
 
 	return userID, nil
 }
@@ -253,7 +322,7 @@ func (a *auth) RefreshTokenTTL() time.Duration { return a.refreshTokenTTL }
 func (a *auth) loggerWithRequestID(ctx context.Context) zerolog.Logger {
 	requestID, ok := xcontext.RequestID(ctx)
 	if !ok {
-		a.logger.Warn().Msg("no requestID in context")
+		a.logger.Error().Msg("no requestID in context")
 		return a.logger
 	}
 

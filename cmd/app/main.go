@@ -65,6 +65,7 @@ func run() error {
 			postgres.NewAuthRepository(dbInstance),
 			auth.Config{},
 			func() []byte { return jwtKey },
+			baseLogger.With().Str("component", "auth").Logger(),
 		),
 		baseLogger.With().Str("component", "http").Logger(),
 		*config.serverConfig,
