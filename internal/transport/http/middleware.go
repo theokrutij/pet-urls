@@ -109,11 +109,11 @@ func (s *server) requiresAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		userID, err := s.auth.Authenticate(r.Context(), []byte(token))
-		if errors.Is(err, auth.ErrTokenExpired) {
-			http.Error(w, "Token expired", http.StatusUnauthorized)
+		if errors.Is(err, auth.ErrInvalidToken) {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		} else if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			http.Error(w, "internal", http.StatusInternalServerError)
 			return
 		}
 

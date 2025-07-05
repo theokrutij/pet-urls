@@ -28,11 +28,10 @@ func parseJWT(tokenCandidate string, keyFunc func() []byte) (UserID, error) {
 	kf := func(t *jwt.Token) (any, error) { return keyFunc(), nil }
 	token, err := jwt.Parse(tokenCandidate, kf, opts...)
 	if errors.Is(err, jwt.ErrTokenExpired) {
-		return nil, ErrTokenExpired
+		return nil, errJWTExpired
 	} else if err != nil {
 		return nil, err
 	}
-
 	userIDStr, err := token.Claims.GetSubject()
 	if err != nil {
 		return nil, err

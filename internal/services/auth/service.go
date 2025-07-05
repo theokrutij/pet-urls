@@ -13,15 +13,16 @@ type Service interface {
 		Creates new user represented by userID.
 
 		If successful, returns nil.
-		If provided credentials are invalid, returns either ErrInvalidLogin or ErrInvalidPassword
+		If login cannot be used, returns ErrInvalidLogin.
+		If password cannot be used, returns ErrInvalidPassword.
+		If login is not unique, returns ErrLoginNotUnique
 	*/
 	Register(ctx context.Context, login, password string) error
 	/*
 		Creates new user session represented by refreshToken.
 
-		If successful, returns refreshToken.
-		If credentials are invalid, returns either ErrInvalidLogin or ErrInvalidPassword
-		If login already exists, returns ErrLoginNotUnique
+		If successful, returns RefreshToken and AccessToken.
+		If credentials are invalid, returns ErrInvalidCredentials.
 	*/
 	Login(ctx context.Context, login, password string) (RefreshToken, AccessToken, error)
 
@@ -36,9 +37,7 @@ type Service interface {
 		Issues an access token for user sesion represented by the refreshToken.
 
 		If successful, returns accessToken.
-		If refreshToken is invalid, returns ErrInvalidToken.
-		If token was revoked, returns ErrTokenWasRevoked.
-		If token expired, returns ErrTokenExpired.
+		If tokenCandidate cannot be used to issue an accessToken, returns ErrInvalidToken.
 	*/
 	Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken, error)
 

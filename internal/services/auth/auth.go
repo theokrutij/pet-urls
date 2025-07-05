@@ -13,14 +13,14 @@ import (
 )
 
 var (
-	ErrInvalidLogin         = errors.New("invalid login")
-	ErrInvalidPassword      = errors.New("invalid password")
-	ErrLoginNotUnique       = errors.New("login not unique")
-	ErrLoginDoesNotExist    = errors.New("login does not exist")
-	ErrPasswordDoesNotMatch = errors.New("password does not match")
-	ErrInvalidToken         = errors.New("invalid token")
-	ErrTokenWasRevoked      = errors.New("token was revoked")
-	ErrTokenExpired         = errors.New("token expired")
+	ErrInvalidLogin       = errors.New("invalid login")
+	ErrInvalidPassword    = errors.New("invalid password")
+	ErrLoginNotUnique     = errors.New("login not unique")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrInvalidToken       = errors.New("invalid token")
+
+	// used internally to wrap jwt-specific error
+	errJWTExpired = errors.New("JWT expired")
 )
 
 type UserID []byte
@@ -129,13 +129,13 @@ func isNotUniqueError(err error) bool {
 func (a *auth) Login(ctx context.Context, login, password string) (RefreshToken, AccessToken, error) {
 	user, err := a.repo.GetUser(ctx, login)
 	if isNotFoundError(err) {
-		return nil, nil, fmt.Errorf("auth, fetching user from repo: %w", ErrLoginDoesNotExist)
+		return nil, nil, fmt.Errorf("auth, fetching user from repo: %w", ErrInvalidCredentials)
 	} else if err != nil {
-		return nil, nil, fmt.Errorf("auth, fetching user from repo: internal") // don't leak
+		return nil, nil, fmt.Errorf("auth, fetching user from repo failed")
 	}
 
 	if !passwordMatchesHash(password, user.PasswordHash) {
-		return nil, nil, fmt.Errorf("auth, validating password: %w", ErrPasswordDoesNotMatch)
+		return nil, nil, fmt.Errorf("auth, validating password: %w", ErrInvalidCredentials)
 	}
 
 	refreshToken, err := a.issueRefreshToken(ctx, user.ID)
@@ -220,11 +220,11 @@ func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken,
 	}
 
 	if refreshToken.RevokedAt != nil {
-		return nil, fmt.Errorf("auth, refreshing token: %w", ErrTokenWasRevoked)
+		return nil, fmt.Errorf("auth, refreshing token: %w", ErrInvalidToken)
 	}
 
 	if refreshToken.ExpiresAt.Before(time.Now()) {
-		return nil, fmt.Errorf("auth, refreshing token: %w", ErrTokenExpired)
+		return nil, fmt.Errorf("auth, refreshing token: %w", ErrInvalidToken)
 	}
 
 	accessToken, err := a.issueAccessToken(refreshToken.UserID)
@@ -237,7 +237,7 @@ func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken,
 
 func (a *auth) Authenticate(ctx context.Context, tokenCandidate []byte) (UserID, error) {
 	userID, err := parseJWT(string(tokenCandidate), a.keyFunc) // might return ErrTokenExpired
-	if errors.Is(err, ErrTokenExpired) {
+	if errors.Is(err, errJWTExpired) {
 		return nil, fmt.Errorf("auth, validating access token: %w", err)
 	} else if err != nil {
 		return nil, fmt.Errorf("auth, validating access token: internal") // don't leak

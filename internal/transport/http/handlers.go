@@ -105,7 +105,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	refreshToken, accessToken, err := s.auth.Login(r.Context(), login, password)
-	if errors.Is(err, auth.ErrLoginDoesNotExist) || errors.Is(err, auth.ErrPasswordDoesNotMatch) {
+	if errors.Is(err, auth.ErrInvalidCredentials) {
 		writeError(w, codeUnauthenticated, "invalid credentials")
 		return
 	} else if err != nil {
