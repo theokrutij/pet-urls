@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+
+	xcontext "github.com/theokrutij/pet-urls/internal/context"
 )
 
 var (
@@ -45,6 +48,7 @@ type UserInRepo struct {
 type auth struct {
 	repo    repository
 	keyFunc func() []byte
+	logger  zerolog.Logger
 
 	// config parameters
 	refreshTokenTTL time.Duration
@@ -56,10 +60,11 @@ type Config struct {
 	AccessTokenTTL  time.Duration // default: 15 minutes
 }
 
-func New(repo repository, config Config, kf func() []byte) Service {
+func New(repo repository, config Config, kf func() []byte, logger zerolog.Logger) Service {
 	a := &auth{
 		repo:    repo,
 		keyFunc: kf,
+		logger:  logger,
 	}
 	a = applyConfig(a, config)
 
@@ -83,38 +88,32 @@ func applyConfig(a *auth, c Config) *auth {
 }
 
 func (a *auth) HealthCheck(ctx context.Context) error {
+	logger := a.loggerWithRequestID(ctx)
 	if err := a.repo.HealthCheck(ctx); err != nil {
-		return fmt.Errorf("auth, repo healthcheck: internal") // don't leak
+		logger.Error().
+			Err(err).
+			Msg("repo healthcheck fail")
+		return fmt.Errorf("auth, repo healthcheck fail")
 	}
-
 	return nil
 }
 
-func (a *auth) Register(ctx context.Context, login, password string) (RefreshToken, AccessToken, error) {
+func (a *auth) Register(ctx context.Context, login, password string) error {
 	if len(login) > 64 {
-		return nil, nil, fmt.Errorf("auth, registering: %w", ErrInvalidLogin)
+		return fmt.Errorf("auth, registering: %w", ErrInvalidLogin)
 	}
 	passwordHash, err := hashPassword(password)
 	if err != nil {
-		return nil, nil, fmt.Errorf("auth, hashing password: %w", ErrInvalidPassword)
+		return fmt.Errorf("auth, hashing password: %w", ErrInvalidPassword)
 	}
-	userID, err := a.repo.SaveUser(ctx, UserInRepo{Login: login, PasswordHash: passwordHash})
+	_, err = a.repo.SaveUser(ctx, UserInRepo{Login: login, PasswordHash: passwordHash})
 	if isNotUniqueError(err) {
-		return nil, nil, fmt.Errorf("auth, saving user: %w", ErrLoginNotUnique)
+		return fmt.Errorf("auth, saving user: %w", ErrLoginNotUnique)
 	} else if err != nil {
-		return nil, nil, fmt.Errorf("auth, saving user: internal") // don't leak
+		return fmt.Errorf("auth, saving user: repo failure")
 	}
 
-	refreshToken, err := a.issueRefreshToken(ctx, userID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("auth, issuing refresh token: %w", err)
-	}
-	accessToken, err := a.issueAccessToken(userID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("auth, issuing access token: %w", err)
-	}
-
-	return refreshToken, accessToken, nil
+	return nil
 }
 
 type NotUniqueError interface {
@@ -248,3 +247,15 @@ func (a *auth) Authenticate(ctx context.Context, tokenCandidate []byte) (UserID,
 }
 
 func (a *auth) RefreshTokenTTL() time.Duration { return a.refreshTokenTTL }
+
+// ------- Context utils -------
+
+func (a *auth) loggerWithRequestID(ctx context.Context) zerolog.Logger {
+	requestID, ok := xcontext.RequestID(ctx)
+	if !ok {
+		a.logger.Warn().Msg("no requestID in context")
+		return a.logger
+	}
+
+	return a.logger.With().Str("request_id", requestID).Logger()
+}
