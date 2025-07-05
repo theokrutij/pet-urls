@@ -30,7 +30,8 @@ type cache interface {
 	// NOTE: cache key TTL does not correlate with token's inner TTL.
 	SaveToken(ctx context.Context, token URLToken, ttl time.Duration) error
 	// GetToken fetches token from cache.
-	GetToken(ctx context.Context, tokenStr string) (URLToken, error)
+	// If token is not present in cache, ok == false
+	GetToken(ctx context.Context, tokenStr string) (token URLToken, ok bool, err error)
 	// DeleteToken deletes token from cache.
 	DeleteToken(ctx context.Context, tokenStr string) error
 }

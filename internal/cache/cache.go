@@ -56,22 +56,25 @@ func (c *cache) SaveToken(ctx context.Context, token shortener.URLToken, ttl tim
 	return c.set(ctx, string(token.Token), string(b), ttl)
 }
 
-func (c *cache) GetToken(ctx context.Context, tokenStr string) (shortener.URLToken, error) {
+func (c *cache) GetToken(ctx context.Context, tokenStr string) (shortener.URLToken, bool, error) {
 	var token shortener.URLToken
 	cacheValue, err := c.get(ctx, tokenStr)
+	if errors.Is(err, redis.Nil) {
+		return token, false, nil
+	}
 	if err != nil {
-		return token, err
+		return token, false, err
 	}
 
 	var tcv tokenAsCacheValue
 	err = json.Unmarshal([]byte(cacheValue), &tcv)
 	if err != nil {
-		return token, err
+		return token, true, err
 	}
 
 	token.URL = shortener.URL(tcv.URL)
 	token.ExpiresAt = tcv.Exp
-	return token, nil
+	return token, true, nil
 }
 
 func (c *cache) DeleteToken(ctx context.Context, tokenStr string) error {
