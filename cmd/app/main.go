@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/theokrutij/pet-urls/internal/cache"
 	"github.com/theokrutij/pet-urls/internal/db/postgres"
 	"github.com/theokrutij/pet-urls/internal/services/auth"
@@ -45,10 +46,19 @@ func run() error {
 		return err
 	}
 
+	// Logger
+	baseLogger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	if config.debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
+
 	server, err := httpx.NewServer(
 		shortener.New(
 			postgres.NewShortenerRepository(dbInstance),
 			cacheInstance,
+			baseLogger.With().Str("component", "shortener").Logger(),
 			shortener.Config{},
 		),
 		auth.New(
@@ -56,6 +66,7 @@ func run() error {
 			auth.Config{},
 			func() []byte { return jwtKey },
 		),
+		baseLogger.With().Str("component", "http").Logger(),
 		*config.serverConfig,
 	)
 	if err != nil {

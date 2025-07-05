@@ -10,6 +10,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/rs/zerolog"
+	xcontext "github.com/theokrutij/pet-urls/internal/context"
 )
 
 // ------- Constants and sentinel errors -------
@@ -55,8 +57,9 @@ type Config struct {
 }
 
 type shortener struct {
-	repo  repository
-	cache cache
+	repo   repository
+	cache  cache
+	logger zerolog.Logger
 
 	// config parameters
 	cacheTTL           time.Duration
@@ -66,8 +69,8 @@ type shortener struct {
 
 // ------- Constructor --------
 
-func New(repo repository, cache cache, config Config) Service {
-	s := &shortener{repo: repo, cache: cache}
+func New(repo repository, cache cache, logger zerolog.Logger, config Config) Service {
+	s := &shortener{repo: repo, cache: cache, logger: logger}
 	s = applyConfig(s, config)
 	return s
 }
@@ -189,15 +192,32 @@ func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, userID []b
 //   - If input.Token is an empty string, a random base58 encoded byte sequence is used as token.
 //   - If input.TTL is zero or negative, a default TTL is set
 func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (URLToken, error) {
+	logger := s.logger
+	requestID, ok := xcontext.RequestID(ctx)
+	if ok {
+		logger = logger.With().Str("request_id", requestID).Logger()
+	}
+	logger.Debug().
+		Str("url", input.URL).
+		Dur("ttl", input.TTL).
+		Str("token", input.Token).
+		Msg("createToken: starting")
 	var output URLToken
 
 	httpURL, err := normalizeHTTP(string(input.URL))
 	if err != nil {
+		logger.Warn().
+			Str("url", input.URL).
+			Err(err).
+			Msg("createToken: invalid url")
 		return output, ErrInvalidURL
 	}
 	output.URL = httpURL
 
 	if utf8.RuneCountInString(input.Token) > 64 {
+		logger.Warn().
+			Str("token", input.Token).
+			Msg("createToken: token too long")
 		return output, ErrInvalidToken
 	}
 
@@ -205,6 +225,9 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 	if input.TTL > 0 {
 		ttl = input.TTL
 	} else {
+		logger.Debug().
+			Dur("defaultTTL", s.tokenTTL).
+			Msg("createToken: setting default token TTL")
 		ttl = s.tokenTTL
 	}
 	exp := time.Now().UTC().Add(ttl)
@@ -214,6 +237,9 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 		output.Token = Token(input.Token)
 	} else {
 		output.Token, err = s.generateRandomBase58()
+		logger.Debug().
+			Str("token", string(output.Token)).
+			Msg("createToken: setting random base58 token")
 		if err != nil {
 			return output, fmt.Errorf("generating random token: %w", err)
 		}
@@ -224,14 +250,32 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 	// NOTE: token collision treated as critical error, p ≈ 5.42e-20
 	err = s.repo.SaveToken(ctx, output)
 	if isNotUniqueError(err) {
+		logger.Warn().
+			Str("token", string(output.Token)).
+			Msg("createToken: token not unique")
 		return output, fmt.Errorf("saving to repo: %w", ErrTokenIsNotUnique)
 	} else if err != nil {
+		logger.Error().
+			Str("token", string(output.Token)).
+			Err(err).
+			Msg("createToken: failed to save token to repo")
 		return output, fmt.Errorf("saving to repo: %w", err)
 	}
 
 	// Storing new token in cache, ignoring errors for now
-	// TODO: log cache failure
-	_ = s.cache.SaveToken(ctx, output, s.cacheTTL)
+	err = s.cache.SaveToken(ctx, output, s.cacheTTL)
+	if err != nil {
+		logger.Warn().
+			Str("token", string(output.Token)).
+			Err(err).
+			Msg("createToken: failed to save token to cache")
+	}
+
+	logger.Info().
+		Str("token", string(output.Token)).
+		Str("url", string(output.URL)).
+		Time("expires_at", *output.ExpiresAt).
+		Msg("createToken: token created successfully")
 
 	return output, nil
 }

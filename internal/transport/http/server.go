@@ -3,10 +3,10 @@ package http
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/theokrutij/pet-urls/internal/services/auth"
 	"github.com/theokrutij/pet-urls/internal/services/shortener"
 )
@@ -31,27 +31,33 @@ type server struct {
 	auth      auth.Service
 
 	router *http.ServeMux
-	logger *slog.Logger
+	logger zerolog.Logger
 }
 
 type Config struct {
-	Debug  bool         // default=false
-	Port   int          // default=80
-	Host   string       // default=localhost
-	Logger *slog.Logger // default=no logging
+	Debug bool   // default=false
+	Port  int    // default=80
+	Host  string // default=localhost
 }
 
-func NewServer(shortener shortener.Service, auth auth.Service, config Config) (*server, error) {
+func NewServer(shortener shortener.Service, auth auth.Service, logger zerolog.Logger, config Config) (*server, error) {
 	server := &server{
 		s:         &http.Server{},
 		shortener: shortener,
 		auth:      auth,
+		logger:    logger,
 	}
 
 	// Initialize the router
 	server.router = http.NewServeMux()
 	server.s.Handler = server.router
 	server.initializeRoutes()
+
+	// Logger
+	server.s.Handler = server.loggingMiddleware(server.s.Handler)
+
+	// Tracing
+	server.s.Handler = server.requestIDMiddleware(server.s.Handler)
 
 	// Config
 	server = applyConfig(server, config)
@@ -88,23 +94,17 @@ func applyConfig(server *server, config Config) *server {
 	}
 	server.s.Addr = fmt.Sprintf("%s:%d", config.Host, port)
 
-	// logger
-	if config.Logger != nil {
-		server.logger = config.Logger
-		server.s.Handler = server.loggingMiddleware(server.s.Handler)
-	}
-
 	return server
 }
 
 func (s *server) Start() error {
-	s.logger.Info(fmt.Sprintf("Listening on %s", s.s.Addr))
+	s.logger.Info().Msg(fmt.Sprintf("Listening on %s", s.s.Addr))
 	err := s.s.ListenAndServe()
 	return err
 }
 
 func (s *server) Shutdown(ctx context.Context) error {
-	s.logger.Info("Shutting down")
+	s.logger.Info().Msg("Shutting down")
 	err := s.s.Shutdown(ctx)
 	return err
 }

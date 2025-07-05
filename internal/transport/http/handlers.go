@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	xcontext "github.com/theokrutij/pet-urls/internal/context"
 	"github.com/theokrutij/pet-urls/internal/services/auth"
 	"github.com/theokrutij/pet-urls/internal/services/shortener"
 )
@@ -249,7 +250,7 @@ func (s *server) handleCreateTokenWithOwner(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	userID, ok := userIDFromContext(r.Context())
+	userID, ok := xcontext.UserIDFromContext(r.Context())
 	if !ok {
 		writeError(w, codeUnauthenticated, "unauthenticated")
 		return
@@ -290,7 +291,7 @@ func (s *server) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, ok := userIDFromContext(r.Context())
+	userID, ok := xcontext.UserIDFromContext(r.Context())
 	if !ok {
 		writeError(w, codeUnauthenticated, "unauthenticated")
 		return

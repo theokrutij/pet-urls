@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log/slog"
 	"os"
 	"strconv"
 
@@ -13,6 +12,7 @@ import (
 )
 
 type AppConfig struct {
+	debug        bool
 	serverConfig *httpx.Config
 	dbConfig     *postgres.Config
 	cacheConfig  *cache.Config
@@ -51,10 +51,10 @@ func loadConfig() (*AppConfig, error) {
 	}
 
 	return &AppConfig{
+		debug: *debug,
 		serverConfig: &httpx.Config{
-			Debug:  *debug,
-			Port:   port,
-			Logger: slog.Default(), // TODO: add log setup
+			Debug: *debug,
+			Port:  port,
 		},
 		dbConfig: &postgres.Config{
 			DSN: postgresDSN,
