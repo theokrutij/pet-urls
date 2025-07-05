@@ -173,7 +173,7 @@ func (s *server) handleRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refreshToken, accessToken, err := s.auth.Register(r.Context(), request.Login, request.Password)
+	err = s.auth.Register(r.Context(), request.Login, request.Password)
 	if errors.Is(err, auth.ErrInvalidLogin) {
 		writeError(w, codeInvalidParameter, "invalid login")
 		return
@@ -188,8 +188,7 @@ func (s *server) handleRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.setRefreshTokenCookie(w, refreshToken)
-	writeAccessTokenAsJSON(w, accessToken)
+	w.WriteHeader(201)
 }
 
 func (s *server) handleTokenRefresh(w http.ResponseWriter, r *http.Request) {

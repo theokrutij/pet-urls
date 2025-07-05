@@ -12,10 +12,10 @@ type Service interface {
 	/*
 		Creates new user represented by userID.
 
-		If successful, return accessToken and refreshToken.
+		If successful, returns nil.
 		If provided credentials are invalid, returns either ErrInvalidLogin or ErrInvalidPassword
 	*/
-	Register(ctx context.Context, login, password string) (RefreshToken, AccessToken, error)
+	Register(ctx context.Context, login, password string) error
 	/*
 		Creates new user session represented by refreshToken.
 
