@@ -50,14 +50,14 @@ func NewServer(shortener shortener.Service, auth auth.Service, logger zerolog.Lo
 
 	// Initialize the router
 	server.router = http.NewServeMux()
-	server.s.Handler = server.router
 	server.initializeRoutes()
 
-	// Logger
-	server.s.Handler = server.loggingMiddleware(server.s.Handler)
-
-	// Tracing
-	server.s.Handler = server.requestIDMiddleware(server.s.Handler)
+	// Middleware
+	server.s.Handler = chain(
+		server.router,
+		server.requestIDMiddleware,
+		server.loggingMiddleware,
+	)
 
 	// Config
 	server = applyConfig(server, config)
@@ -76,13 +76,12 @@ func applyConfig(server *server, config Config) *server {
 		server.s.WriteTimeout = writeTimeout
 		server.s.IdleTimeout = idleTimeout
 
-		server.s.Handler = timeoutMiddleware(server.s.Handler, handleTimeout)
-
-		// hard timeout in case handler doesn't honor context properly
-		server.s.Handler = http.TimeoutHandler(server.s.Handler, handleTimeout+10*time.Millisecond, "Server timeout")
-
-		// body size limit
-		server.s.Handler = maxBodyMiddleware(server.s.Handler)
+		// HTTP-specific middleware
+		server.s.Handler = chain(
+			server.s.Handler,
+			timeoutMiddleware(handleTimeout), // hard timeout in case handler doesn't honor context properly
+			maxBodyMiddleware,                // body size limit
+		)
 	}
 
 	// address
@@ -95,6 +94,13 @@ func applyConfig(server *server, config Config) *server {
 	server.s.Addr = fmt.Sprintf("%s:%d", config.Host, port)
 
 	return server
+}
+
+func chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		h = middlewares[i](h)
+	}
+	return h
 }
 
 func (s *server) Start() error {

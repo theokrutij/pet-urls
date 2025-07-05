@@ -25,13 +25,15 @@ func maxBodyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(f)
 }
 
-func timeoutMiddleware(next http.Handler, timeout time.Duration) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), timeout)
-		defer cancel()
+func timeoutMiddleware(timeout time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithTimeout(r.Context(), timeout)
+			defer cancel()
 
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 // ------- Logging middleware --------
@@ -57,12 +59,17 @@ func (s *server) loggingMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(sc, r)
 
+		requestID, ok := xcontext.RequestID(r.Context())
+		if !ok {
+			s.logger.Fatal().Msg("requestID not in context")
+		}
 		s.logger.Info().
+			Str("request_id", requestID).
 			Str("method", r.Method).
 			Str("path", r.URL.String()).
 			Int("status", sc.status).
-			Dur("processing time, ms", time.Since(start)).
-			Msg("HTTP request done")
+			Dur("duration, ms", time.Since(start)).
+			Msg("HTTP request completed")
 	})
 }
 
