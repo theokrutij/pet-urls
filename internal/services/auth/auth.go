@@ -54,23 +54,28 @@ type UserInRepo struct {
 type auth struct {
 	repo    repository
 	keyFunc func() []byte
-	logger  zerolog.Logger
 
 	// config parameters
 	refreshTokenTTL time.Duration
 	accessTokenTTL  time.Duration
+	logger          zerolog.Logger
+}
+
+type Dependencies struct {
+	Repo    repository
+	KeyFunc func() []byte
 }
 
 type Config struct {
-	RefreshTokenTTL time.Duration // default: 7 days
-	AccessTokenTTL  time.Duration // default: 15 minutes
+	RefreshTokenTTL time.Duration  // default: 7 days
+	AccessTokenTTL  time.Duration  // default: 15 minutes
+	Logger          zerolog.Logger // default: no logging
 }
 
-func New(repo repository, config Config, kf func() []byte, logger zerolog.Logger) Service {
+func New(deps Dependencies, config Config) Service {
 	a := &auth{
-		repo:    repo,
-		keyFunc: kf,
-		logger:  logger,
+		repo:    deps.Repo,
+		keyFunc: deps.KeyFunc,
 	}
 	a = applyConfig(a, config)
 
@@ -89,6 +94,8 @@ func applyConfig(a *auth, c Config) *auth {
 	} else {
 		a.accessTokenTTL = c.AccessTokenTTL
 	}
+
+	a.logger = c.Logger
 
 	return a
 }

@@ -2,7 +2,6 @@ package integration_tests
 
 import (
 	"context"
-	"io"
 	"os"
 	"sync"
 	"testing"
@@ -36,7 +35,7 @@ func setupTestShortener(t *testing.T, tx pgx.Tx) shortener.Service {
 		}
 	})
 
-	return shortener.New(repo, cache, zerolog.New(io.Discard), shortener.Config{})
+	return shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{Logger: zerolog.Nop()})
 }
 
 func beginTx(ctx context.Context, t *testing.T) pgx.Tx {

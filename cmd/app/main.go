@@ -55,20 +55,28 @@ func run() error {
 		baseLogger = baseLogger.Level(zerolog.InfoLevel)
 	}
 
+	config.serverConfig.Logger = baseLogger.With().Str("component", "http").Logger()
 	server, err := httpx.NewServer(
-		shortener.New(
-			postgres.NewShortenerRepository(dbInstance),
-			cacheInstance,
-			baseLogger.With().Str("component", "shortener").Logger(),
-			shortener.Config{},
-		),
-		auth.New(
-			postgres.NewAuthRepository(dbInstance),
-			auth.Config{},
-			func() []byte { return jwtKey },
-			baseLogger.With().Str("component", "auth").Logger(),
-		),
-		baseLogger.With().Str("component", "http").Logger(),
+		httpx.Dependencies{
+			Shortener: shortener.New(
+				shortener.Dependencies{
+					Repo:  postgres.NewShortenerRepository(dbInstance),
+					Cache: cacheInstance,
+				},
+				shortener.Config{
+					Logger: baseLogger.With().Str("component", "shortener").Logger(),
+				},
+			),
+			Auth: auth.New(
+				auth.Dependencies{
+					Repo:    postgres.NewAuthRepository(dbInstance),
+					KeyFunc: func() []byte { return jwtKey },
+				},
+				auth.Config{
+					Logger: baseLogger.With().Str("component", "auth").Logger(),
+				},
+			),
+		},
 		*config.serverConfig,
 	)
 	if err != nil {

@@ -57,27 +57,34 @@ type CreateTokenInput struct {
 	OwnerID ID
 }
 
+type Dependencies struct {
+	Repo  repository
+	Cache cache
+}
+
 type Config struct {
-	CacheTTL           time.Duration // default: 10 minutes
-	TokenTTL           time.Duration // default: 1 hour
-	TokenDecodedLength int           // default: 8
+	CacheTTL           time.Duration  // default: 10 minutes
+	TokenTTL           time.Duration  // default: 1 hour
+	TokenDecodedLength int            // default: 8
+	Logger             zerolog.Logger // default: no logging
 }
 
 type shortener struct {
-	repo   repository
-	cache  cache
-	logger zerolog.Logger
+	// dependencies
+	repo  repository
+	cache cache
 
 	// config parameters
 	cacheTTL           time.Duration
 	tokenTTL           time.Duration
 	tokenDecodedLength int
+	logger             zerolog.Logger
 }
 
 // ------- Constructor --------
 
-func New(repo repository, cache cache, logger zerolog.Logger, config Config) Service {
-	s := &shortener{repo: repo, cache: cache, logger: logger}
+func New(deps Dependencies, config Config) Service {
+	s := &shortener{repo: deps.Repo, cache: deps.Cache}
 	s = applyConfig(s, config)
 	return s
 }
@@ -100,6 +107,8 @@ func applyConfig(s *shortener, c Config) *shortener {
 	} else {
 		s.tokenDecodedLength = c.TokenDecodedLength
 	}
+
+	s.logger = c.Logger
 
 	return s
 }

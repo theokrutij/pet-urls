@@ -34,18 +34,23 @@ type server struct {
 	logger zerolog.Logger
 }
 
-type Config struct {
-	Debug bool   // default=false
-	Port  int    // default=80
-	Host  string // default=localhost
+type Dependencies struct {
+	Shortener shortener.Service
+	Auth      auth.Service
 }
 
-func NewServer(shortener shortener.Service, auth auth.Service, logger zerolog.Logger, config Config) (*server, error) {
+type Config struct {
+	Debug  bool           // default=false
+	Port   int            // default=80
+	Host   string         // default=localhost
+	Logger zerolog.Logger // default=no logging
+}
+
+func NewServer(deps Dependencies, config Config) (*server, error) {
 	server := &server{
 		s:         &http.Server{},
-		shortener: shortener,
-		auth:      auth,
-		logger:    logger,
+		shortener: deps.Shortener,
+		auth:      deps.Auth,
 	}
 
 	// Initialize the router
@@ -92,6 +97,9 @@ func applyConfig(server *server, config Config) *server {
 		port = config.Port
 	}
 	server.s.Addr = fmt.Sprintf("%s:%d", config.Host, port)
+
+	// logging
+	server.logger = config.Logger
 
 	return server
 }
