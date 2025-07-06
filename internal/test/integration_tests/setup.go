@@ -2,6 +2,7 @@ package integration_tests
 
 import (
 	"context"
+	"io"
 	"os"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog"
 	"github.com/theokrutij/pet-urls/internal/cache"
 	"github.com/theokrutij/pet-urls/internal/db/postgres"
 	"github.com/theokrutij/pet-urls/internal/services/shortener"
@@ -34,7 +36,7 @@ func setupTestShortener(t *testing.T, tx pgx.Tx) shortener.Service {
 		}
 	})
 
-	return shortener.New(repo, cache, shortener.Config{})
+	return shortener.New(repo, cache, zerolog.New(io.Discard), shortener.Config{})
 }
 
 func beginTx(ctx context.Context, t *testing.T) pgx.Tx {
