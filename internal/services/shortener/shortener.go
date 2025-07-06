@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/btcsuite/btcutil/base58"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	xcontext "github.com/theokrutij/pet-urls/internal/context"
 )
@@ -277,7 +276,7 @@ func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, requesting
 
 	logger.Info().
 		Str("token", tokenStr).
-		Str("user_id", uuid.Must(uuid.FromBytes(token.OwnerID)).String()).
+		Str("user_id", token.OwnerID.String()).
 		Msg("DeleteToken: success")
 	return nil
 }
