@@ -50,9 +50,9 @@ func run() error {
 	baseLogger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	zerolog.DurationFieldUnit = time.Millisecond // default value, here for documentation
 	if config.debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		baseLogger = baseLogger.Level(zerolog.DebugLevel)
 	} else {
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		baseLogger = baseLogger.Level(zerolog.InfoLevel)
 	}
 
 	server, err := httpx.NewServer(
