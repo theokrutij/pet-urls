@@ -48,6 +48,7 @@ func run() error {
 
 	// Logger
 	baseLogger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	zerolog.DurationFieldUnit = time.Millisecond // default value, here for documentation
 	if config.debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	} else {

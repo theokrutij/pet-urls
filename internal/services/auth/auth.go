@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"time"
@@ -24,6 +25,11 @@ var (
 )
 
 type UserID []byte
+
+func (id UserID) String() string {
+	return base64.RawURLEncoding.EncodeToString(id)
+}
+
 type PasswordHash []byte
 type AccessToken []byte
 type RefreshToken []byte
@@ -126,7 +132,7 @@ func (a *auth) Register(ctx context.Context, login, password string) error {
 	}
 
 	logger.Info().
-		Str("userID", string(userID)).
+		Str("user_id", userID.String()).
 		Msg("Register: success")
 
 	return nil
@@ -152,7 +158,6 @@ func (a *auth) Login(ctx context.Context, login, password string) (RefreshToken,
 		return nil, nil, fmt.Errorf("auth, fetching user from repo: %w", ErrInvalidCredentials)
 	} else if err != nil {
 		logger.Error().
-			Err(err).
 			Msg("Login: failed to fetch login from repo")
 		return nil, nil, fmt.Errorf("auth, fetching user from repo failed")
 	}
@@ -167,7 +172,6 @@ func (a *auth) Login(ctx context.Context, login, password string) (RefreshToken,
 	refreshToken, err := a.issueRefreshToken(ctx, user.ID)
 	if err != nil {
 		logger.Error().
-			Err(err).
 			Msg("Login: failed to issue refresh token")
 		return nil, nil, fmt.Errorf("auth, issuing refresh token: %w", err)
 	}
@@ -175,7 +179,6 @@ func (a *auth) Login(ctx context.Context, login, password string) (RefreshToken,
 	accessToken, err := a.issueAccessToken(user.ID)
 	if err != nil {
 		logger.Error().
-			Err(err).
 			Msg("Login: failed to issue access token")
 		return nil, nil, fmt.Errorf("auth, issuing access token: %w", err)
 	}
@@ -241,7 +244,6 @@ func (a *auth) Logout(ctx context.Context, tokenCandidate []byte) error {
 	err := a.repo.RevokeRefreshToken(ctx, tokenHash)
 	if err != nil {
 		logger.Error().
-			Err(err).
 			Msg("Logout: failed to revoke refresh token")
 		return fmt.Errorf("auth, revoking refresh token: internal")
 	}
@@ -264,7 +266,6 @@ func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken,
 		return nil, fmt.Errorf("auth, fetching refresh token: %w", ErrInvalidToken)
 	} else if err != nil {
 		logger.Error().
-			Err(err).
 			Msg("Refresh: failed to fetch refresh token from repo")
 		return nil, fmt.Errorf("auth, fetching refresh token failed")
 	}
@@ -284,7 +285,6 @@ func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken,
 	accessToken, err := a.issueAccessToken(refreshToken.UserID)
 	if err != nil {
 		logger.Error().
-			Err(err).
 			Msg("Refresh: failed to issue access token")
 		return nil, fmt.Errorf("auth, issuing access token: %w", err)
 	}

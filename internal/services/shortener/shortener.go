@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"time"
 	"unicode/utf8"
 
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	xcontext "github.com/theokrutij/pet-urls/internal/context"
 )
@@ -36,18 +38,24 @@ var (
 type Token string
 type URL string
 
+type ID []byte
+
+func (id ID) String() string {
+	return base64.RawURLEncoding.EncodeToString(id)
+}
+
 type URLToken struct {
 	Token     Token
 	URL       URL
 	ExpiresAt *time.Time
-	OwnerID   []byte
+	OwnerID   ID
 }
 
 type CreateTokenInput struct {
 	URL     string
 	TTL     time.Duration
 	Token   string
-	OwnerID []byte
+	OwnerID ID
 }
 
 type Config struct {
@@ -188,7 +196,7 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 		Str("token", tokenStr).
 		Str("url", string(token.URL))
 	if token.OwnerID != nil {
-		logEvent.Str("ownerID", string(token.OwnerID))
+		logEvent.Str("owner_id", token.OwnerID.String())
 	}
 	logEvent.Msg("ResolveToken: success")
 
@@ -217,7 +225,7 @@ func (s *shortener) CreateTokenWithOwner(ctx context.Context, input CreateTokenI
 		logger.Info().
 			Str("token", string(output.Token)).
 			Str("url", string(output.URL)).
-			Str("ownerID", string(output.OwnerID)).
+			Str("owner_id", string(output.OwnerID)).
 			Time("expires_at", *output.ExpiresAt).
 			Msg("CreateTokenWithOwner: success")
 	}
@@ -245,8 +253,8 @@ func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, requesting
 	if !bytes.Equal(token.OwnerID, requestingUserID) {
 		logger.Warn().
 			Str("token", tokenStr).
-			Str("requesingUserID", string(requestingUserID)).
-			Str("ownerID", string(token.OwnerID)).
+			Str("requesting_user_id", string(requestingUserID)).
+			Str("owner_id", string(token.OwnerID)).
 			Msg("DeleteToken: non-onwer attempted deleting token")
 		return fmt.Errorf("shortener, deleting token: %w", ErrNotTokenOwner)
 	}
@@ -269,7 +277,7 @@ func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, requesting
 
 	logger.Info().
 		Str("token", tokenStr).
-		Str("userID", string(token.OwnerID)).
+		Str("user_id", uuid.Must(uuid.FromBytes(token.OwnerID)).String()).
 		Msg("DeleteToken: success")
 	return nil
 }
@@ -317,7 +325,7 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 		ttl = input.TTL
 	} else {
 		logger.Debug().
-			Dur("defaultTTL", s.tokenTTL).
+			Dur("default_TTL", s.tokenTTL).
 			Msg("createToken: setting default token TTL")
 		ttl = s.tokenTTL
 	}

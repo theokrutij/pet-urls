@@ -68,7 +68,7 @@ func (s *server) loggingMiddleware(next http.Handler) http.Handler {
 			Str("method", r.Method).
 			Str("path", r.URL.String()).
 			Int("status", sc.status).
-			Dur("duration, ms", time.Since(start)).
+			Dur("duration_ms", time.Since(start)).
 			Msg("HTTP request completed")
 	})
 }
