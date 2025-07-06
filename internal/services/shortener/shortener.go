@@ -157,6 +157,9 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 	// If not found in cache, retrieve from the database
 	token, repoErr := s.repo.GetToken(ctx, tokenStr)
 	if isNotFoundError(repoErr) {
+		logger.Info().
+			Str("token", tokenStr).
+			Msg("ResolveToken: not found in repo")
 		return "", fmt.Errorf("shortener, fetching token from db: %w | token=%s", ErrTokenDoesNotExist, token.Token)
 	} else if repoErr != nil {
 		logger.Error().
@@ -187,7 +190,6 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 	if token.OwnerID != nil {
 		logEvent.Str("ownerID", string(token.OwnerID))
 	}
-
 	logEvent.Msg("ResolveToken: success")
 
 	return token.URL, nil
