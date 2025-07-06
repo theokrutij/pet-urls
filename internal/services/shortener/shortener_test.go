@@ -10,7 +10,7 @@ import (
 )
 
 type mockRepo struct {
-	token URLToken
+	token *URLToken
 }
 
 func (m *mockRepo) HealthCheck(ctx context.Context) error {
@@ -18,12 +18,12 @@ func (m *mockRepo) HealthCheck(ctx context.Context) error {
 }
 
 func (m *mockRepo) SaveToken(cxt context.Context, token URLToken) error {
-	m.token = token
+	m.token = &token
 	return nil
 }
 
 func (m *mockRepo) GetToken(ctx context.Context, tokenStr string) (URLToken, error) {
-	return m.token, nil
+	return *m.token, nil
 }
 
 func (m *mockRepo) DeleteToken(ctx context.Context, tokenStr string) error {
@@ -31,7 +31,7 @@ func (m *mockRepo) DeleteToken(ctx context.Context, tokenStr string) error {
 }
 
 type mockCache struct {
-	token URLToken
+	token *URLToken
 }
 
 func (m *mockCache) HealthCheck(ctx context.Context) error {
@@ -39,12 +39,12 @@ func (m *mockCache) HealthCheck(ctx context.Context) error {
 }
 
 func (m *mockCache) SaveToken(ctx context.Context, token URLToken, ttl time.Duration) error {
-	m.token = token
+	m.token = &token
 	return nil
 }
 
-func (m *mockCache) GetToken(ctx context.Context, tokenStr string) (URLToken, error) {
-	return m.token, nil
+func (m *mockCache) GetToken(ctx context.Context, tokenStr string) (URLToken, bool, error) {
+	return *m.token, true, nil
 }
 
 func (m *mockCache) DeleteToken(ctx context.Context, tokenStr string) error {
@@ -95,6 +95,11 @@ func TestCreateToken(t *testing.T) {
 			},
 		},
 		{
+			name:    "too long token",
+			input:   CreateTokenInput{URL: "http://ok", Token: strings.Repeat("a", 65)},
+			wantErr: ErrInvalidToken,
+		},
+		{
 			name:  "negative TTL",
 			input: CreateTokenInput{URL: "http://ok", TTL: -5 * time.Hour},
 			wantToken: func(t URLToken) bool {
@@ -116,14 +121,14 @@ func TestCreateToken(t *testing.T) {
 		},
 		{
 			name:  "long url",
-			input: CreateTokenInput{URL: "http://o" + strings.Repeat("k.", 996)},
+			input: CreateTokenInput{URL: "http://abcde.com/" + strings.Repeat("a", 1983)},
 			wantToken: func(t URLToken) bool {
-				return string(t.URL) == "http://o"+strings.Repeat("k.", 996)
+				return string(t.URL) == "http://abcde.com/"+strings.Repeat("a", 1983)
 			},
 		},
 		{
 			name:    "too long url",
-			input:   CreateTokenInput{URL: "http://ok" + strings.Repeat("k.", 996)},
+			input:   CreateTokenInput{URL: "http://abcde.com/" + strings.Repeat("a", 1984)},
 			wantErr: ErrInvalidURL,
 		},
 		{
@@ -135,46 +140,65 @@ func TestCreateToken(t *testing.T) {
 			input:   CreateTokenInput{URL: ""},
 			wantErr: ErrInvalidURL,
 		},
-		{
-			name:    "too long token",
-			input:   CreateTokenInput{URL: "http://ok", Token: strings.Repeat("a", 65)},
-			wantErr: ErrInvalidToken,
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			mockRepoInstance := &mockRepo{}
+			mockCacheInstance := &mockCache{}
 			s := &shortener{
 				tokenTTL: time.Minute,
 				cacheTTL: time.Second * 5,
-				repo:     &mockRepo{},
-				cache:    &mockCache{},
+				repo:     mockRepoInstance,
+				cache:    mockCacheInstance,
 			}
+
+			// Action
 			got, err := s.createToken(context.Background(), tt.input)
+
+			// Check 1: if testCase expects sentinel error,
+			// assert that correct error value is returned
+			// and that nothing is passed to repo or cache.
 			if tt.wantErr != nil {
 				if err == nil || !errors.Is(err, tt.wantErr) {
 					t.Fatalf("want error %v, got %v", tt.wantErr, err)
 				}
+				if mockRepoInstance.token != nil {
+					t.Fatalf("expected no token passed to repo, got: %+v", *mockRepoInstance.token)
+				}
+
+				if mockCacheInstance.token != nil {
+					t.Fatalf("expected no token passed to repo, got: %+v", *mockCacheInstance.token)
+				}
 				return
 			}
 
+			// Check 2: if testCase does not expect an error,
+			// assert that no error is returned.
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if tt.wantToken != nil {
+			// If testCase is not expected to return a token,
+			// end test here.
+			if tt.wantToken == nil {
 				return
 			}
 
+			// Check 3: assert that returned token matches expectations
+			// that are defined by the wantToken predicate.
 			if !tt.wantToken(got) {
 				t.Fatalf("unexpected token returned: %.100s", got)
 			}
 
-			if tokenInRepo, _ := s.repo.GetToken(context.Background(), ""); !tt.wantToken(tokenInRepo) || got.Token != tokenInRepo.Token {
+			// Check 4: assert that a token that was passed to repo and cache
+			// matches expectations and that token.Token is the same for returned token
+			// and for the token that was passed into repo and cache.
+			if !tt.wantToken(*mockRepoInstance.token) || got.Token != mockCacheInstance.token.Token {
 				t.Fatalf("unexpected token passed to repo: %.100s", got)
 			}
-
-			if tokenInCache, _ := s.cache.GetToken(context.Background(), ""); !tt.wantToken(tokenInCache) || got.Token != tokenInCache.Token {
+			if !tt.wantToken(*mockCacheInstance.token) || got.Token != mockCacheInstance.token.Token {
 				t.Fatalf("unexpected token passed to cache: %.100s", got)
 			}
 		})

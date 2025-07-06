@@ -55,7 +55,8 @@ func TestToHTTPURL_InvalidInputs(t *testing.T) {
 		in   string
 	}{
 		{"empty_input", ""},
-		{"too long input", "http://" + strings.Repeat("a", 1994)},
+		{"too long domain", "http://aa" + strings.Repeat(".a", 125) + ".com"},
+		{"too long url", "http://abcde.com/" + strings.Repeat("a", 1984)},
 		{"missing_host", "http://"},
 		{"triple_slash", "http:///example.com"},
 
