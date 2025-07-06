@@ -128,13 +128,14 @@ func writeAccessTokenAsJSON(w http.ResponseWriter, token auth.AccessToken) {
 
 const (
 	refreshTokenCookieName = "refreshToken"
+	refreshTokenCookiePath = "/api/v1/auth"
 )
 
 func (s *server) setRefreshTokenCookie(w http.ResponseWriter, token []byte) {
 	cookie := http.Cookie{
 		Name:     refreshTokenCookieName,
 		Value:    base64.URLEncoding.EncodeToString(token),
-		Path:     "/api",
+		Path:     refreshTokenCookiePath,
 		MaxAge:   int(s.auth.RefreshTokenTTL().Seconds()),
 		Secure:   !s.debug, // allow cookies over http for debugging
 		HttpOnly: true,
@@ -147,7 +148,7 @@ func (s *server) expireRefreshTokenCookie(w http.ResponseWriter) {
 	cookie := http.Cookie{
 		Name:   refreshTokenCookieName,
 		Value:  "",
-		Path:   "/api",
+		Path:   refreshTokenCookiePath,
 		MaxAge: -1,
 	}
 	http.SetCookie(w, &cookie)
