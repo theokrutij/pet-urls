@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/theokrutij/pet-urls/internal/cache"
 	"github.com/theokrutij/pet-urls/internal/db/postgres"
@@ -56,6 +57,8 @@ func run() error {
 	}
 
 	config.serverConfig.Logger = baseLogger.With().Str("component", "http").Logger()
+	config.serverConfig.PromRegistry = prometheus.NewRegistry()
+
 	server, err := httpx.NewServer(
 		httpx.Dependencies{
 			Shortener: shortener.New(

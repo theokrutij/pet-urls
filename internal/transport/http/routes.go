@@ -1,8 +1,13 @@
 package http
 
-import "net/http"
+import (
+	"net/http"
 
-func (s *server) initializeRoutes() {
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+func (s *server) initializeRoutes(reg *prometheus.Registry) {
 	// api
 	s.router.HandleFunc("GET /api/v1/health", s.handleHealthcheck)
 	s.router.HandleFunc("POST /api/v1/short", s.handleGenerateURLToken)
@@ -18,4 +23,9 @@ func (s *server) initializeRoutes() {
 
 	//redirects
 	s.router.HandleFunc("GET /api/v1/{token}", s.handleResolveToken())
+
+	// metrics
+	if reg != nil {
+		s.router.Handle(("GET /metrics"), promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
+	}
 }

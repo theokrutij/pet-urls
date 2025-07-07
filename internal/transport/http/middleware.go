@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,25 +53,48 @@ func (w *statusCapture) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-func (s *server) loggingMiddleware(next http.Handler) http.Handler {
+func (s *server) observabilityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sc := &statusCapture{ResponseWriter: w, status: http.StatusOK}
 
 		next.ServeHTTP(sc, r)
 
+		duration := time.Since(start)
+
 		requestID, ok := xcontext.RequestID(r.Context())
 		if !ok {
 			s.logger.Fatal().Msg("requestID not in context")
 		}
+
+		// log request completion
 		s.logger.Info().
 			Str("request_id", requestID).
 			Str("method", r.Method).
 			Str("path", r.URL.String()).
 			Int("status", sc.status).
-			Dur("duration_ms", time.Since(start)).
+			Dur("duration_ms", duration).
 			Msg("HTTP request completed")
+
+		// update metrics
+		if s.metrics != nil && r.Pattern != "" {
+			path := pathWithoutMethod(r.Pattern)
+			statusStr := strconv.Itoa(sc.status)
+
+			s.metrics.observeRequest(r.Method, path, statusStr, duration.Seconds())
+		}
 	})
+}
+
+// pathWithoutMethod trims HTTP method from http.Request.Pattern
+func pathWithoutMethod(pattern string) string {
+	beforeSpace, afterSpace, patternHasSpace := strings.Cut(pattern, " ")
+	if patternHasSpace {
+		return afterSpace
+	} else {
+		return beforeSpace
+	}
+
 }
 
 // ------- Tracing middleware -------

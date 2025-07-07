@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/theokrutij/pet-urls/internal/services/auth"
 	"github.com/theokrutij/pet-urls/internal/services/shortener"
@@ -24,14 +25,17 @@ const (
 )
 
 type server struct {
-	s     *http.Server
-	debug bool
+	s      *http.Server
+	debug  bool
+	router *http.ServeMux
 
+	// services
 	shortener shortener.Service
 	auth      auth.Service
 
-	router *http.ServeMux
-	logger zerolog.Logger
+	// configurable
+	logger  zerolog.Logger
+	metrics *metrics
 }
 
 type Dependencies struct {
@@ -40,10 +44,11 @@ type Dependencies struct {
 }
 
 type Config struct {
-	Debug  bool           // default=false
-	Port   int            // default=80
-	Host   string         // default=localhost
-	Logger zerolog.Logger // default=no logging
+	Debug        bool                 // default=false
+	Port         int                  // default=80
+	Host         string               // default=localhost
+	Logger       zerolog.Logger       // default=no logging
+	PromRegistry *prometheus.Registry // default=no metrics
 }
 
 func NewServer(deps Dependencies, config Config) (*server, error) {
@@ -55,13 +60,14 @@ func NewServer(deps Dependencies, config Config) (*server, error) {
 
 	// Initialize the router
 	server.router = http.NewServeMux()
-	server.initializeRoutes()
+
+	server.initializeRoutes(config.PromRegistry)
 
 	// Middleware
 	server.s.Handler = chain(
 		server.router,
 		server.requestIDMiddleware,
-		server.loggingMiddleware,
+		server.observabilityMiddleware,
 	)
 
 	// Config
@@ -100,6 +106,11 @@ func applyConfig(server *server, config Config) *server {
 
 	// logging
 	server.logger = config.Logger
+
+	// metrics
+	if config.PromRegistry != nil {
+		server.metrics = setupMetrics(config.PromRegistry)
+	}
 
 	return server
 }
