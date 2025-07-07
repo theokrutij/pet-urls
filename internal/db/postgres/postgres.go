@@ -29,6 +29,12 @@ type postgresConnectionPool struct {
 
 type Config struct {
 	DSN string
+
+	MaxConns          int32         // min: 20, max: 50
+	MinIddleConns     int32         // min: 0, max: 5
+	MaxConnLifetime   time.Duration // min: 0, max: 1h
+	MaxConnIdleTime   time.Duration // min: 0, max: 10m
+	HealthCheckPeriod time.Duration // min: 30s, max: 2m
 }
 
 func New(ctx context.Context, config *Config) (Postgres, error) {
@@ -37,16 +43,65 @@ func New(ctx context.Context, config *Config) (Postgres, error) {
 		return nil, err
 	}
 
+	pgxConfig = applyAppConfig(pgxConfig, config)
+
 	pool, err := pgxpool.NewWithConfig(ctx, pgxConfig)
 	if err != nil {
 		return nil, err
 	}
+
 	go func() {
 		<-ctx.Done()
 		pool.Close()
 	}()
 
 	return &postgresConnectionPool{pool}, nil
+}
+
+func applyAppConfig(pgxConfig *pgxpool.Config, appConfig *Config) *pgxpool.Config {
+	if appConfig.MaxConns < 20 {
+		pgxConfig.MaxConns = 20
+	} else if appConfig.MaxConns > 50 {
+		pgxConfig.MaxConns = 50
+	} else {
+		pgxConfig.MaxConns = appConfig.MaxConns
+	}
+
+	if appConfig.MinIddleConns < 0 {
+		pgxConfig.MinIdleConns = 0
+	} else if appConfig.MinIddleConns > 5 {
+		pgxConfig.MinIdleConns = 5
+	} else {
+		pgxConfig.MinIdleConns = appConfig.MinIddleConns
+	}
+
+	if appConfig.MaxConnLifetime < 0 {
+		pgxConfig.MaxConnLifetime = time.Hour
+	} else if appConfig.MaxConnLifetime > time.Hour {
+		pgxConfig.MaxConnLifetime = time.Hour
+	} else {
+		pgxConfig.MaxConnLifetime = appConfig.MaxConnLifetime
+	}
+
+	pgxConfig.MaxConnLifetimeJitter = pgxConfig.MaxConnLifetime / 10
+
+	if appConfig.MaxConnIdleTime < 0 {
+		pgxConfig.MaxConnIdleTime = 0
+	} else if appConfig.MaxConnIdleTime > 10*time.Minute {
+		pgxConfig.MaxConnIdleTime = 10 * time.Minute
+	} else {
+		pgxConfig.MaxConnIdleTime = appConfig.MaxConnIdleTime
+	}
+
+	if appConfig.HealthCheckPeriod < 30*time.Second {
+		pgxConfig.HealthCheckPeriod = 40 * time.Second
+	} else if appConfig.HealthCheckPeriod > 2*time.Minute {
+		pgxConfig.HealthCheckPeriod = 2 * time.Minute
+	} else {
+		pgxConfig.HealthCheckPeriod = appConfig.HealthCheckPeriod
+	}
+
+	return pgxConfig
 }
 
 func withRetry(ctx context.Context, fn func(context.Context) error) error { // TODO: review and refactor, if needed
