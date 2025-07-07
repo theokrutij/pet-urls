@@ -31,17 +31,20 @@ func run() error {
 		return err
 	}
 
+	// Context
 	appContext, cancelAppContext := context.WithCancel(context.Background())
 	defer cancelAppContext()
-	// Init adapters
+
+	// Postgres
 	dbInstance, err := postgres.New(appContext, config.dbConfig)
 	if err != nil {
 		return fmt.Errorf("postgres.New: %w", err)
 	}
+
+	// Redis
 	cacheInstance := cache.New(config.cacheConfig) // Replace with actual cache initialization if needed
 
-	// Initialize the HTTP server with services and config
-
+	// Server key
 	jwtKey, err := loadJWTKey()
 	if err != nil {
 		return err
@@ -55,10 +58,12 @@ func run() error {
 	} else {
 		baseLogger = baseLogger.Level(zerolog.InfoLevel)
 	}
-
 	config.serverConfig.Logger = baseLogger.With().Str("component", "http").Logger()
+
+	// Prometheus registry
 	config.serverConfig.PromRegistry = prometheus.NewRegistry()
 
+	// Server instance
 	server, err := httpx.NewServer(
 		httpx.Dependencies{
 			Shortener: shortener.New(
