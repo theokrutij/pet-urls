@@ -2,11 +2,17 @@ package auth
 
 import (
 	"errors"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func generateJWT(claims claims, keyFunc func() []byte) ([]byte, error) {
+type JWTclaims struct {
+	UserID    UserID
+	ExpiresAt time.Time
+}
+
+func generateJWT(claims JWTclaims, keyFunc func() []byte) ([]byte, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		ExpiresAt: jwt.NewNumericDate(claims.ExpiresAt),
 		Subject:   string(claims.UserID),

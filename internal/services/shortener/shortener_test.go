@@ -9,48 +9,6 @@ import (
 	"time"
 )
 
-type mockRepo struct {
-	token *URLToken
-}
-
-func (m *mockRepo) HealthCheck(ctx context.Context) error {
-	return nil
-}
-
-func (m *mockRepo) SaveToken(cxt context.Context, token URLToken) error {
-	m.token = &token
-	return nil
-}
-
-func (m *mockRepo) GetToken(ctx context.Context, tokenStr string) (URLToken, error) {
-	return *m.token, nil
-}
-
-func (m *mockRepo) DeleteToken(ctx context.Context, tokenStr string) error {
-	return nil
-}
-
-type mockCache struct {
-	token *URLToken
-}
-
-func (m *mockCache) HealthCheck(ctx context.Context) error {
-	return nil
-}
-
-func (m *mockCache) SaveToken(ctx context.Context, token URLToken, ttl time.Duration) error {
-	m.token = &token
-	return nil
-}
-
-func (m *mockCache) GetToken(ctx context.Context, tokenStr string) (URLToken, bool, error) {
-	return *m.token, true, nil
-}
-
-func (m *mockCache) DeleteToken(ctx context.Context, tokenStr string) error {
-	return nil
-}
-
 func TestCreateToken(t *testing.T) {
 	ttlMatches := func(token URLToken, expectedTTL time.Duration) bool {
 		tokenTTL := token.ExpiresAt.Sub(time.Now().UTC())
@@ -181,7 +139,7 @@ func TestCreateToken(t *testing.T) {
 			}
 
 			// If testCase is not expected to return a token,
-			// end test here.
+			// the test case passes.
 			if tt.wantToken == nil {
 				return
 			}
@@ -203,4 +161,58 @@ func TestCreateToken(t *testing.T) {
 			}
 		})
 	}
+}
+
+// mockRepo implements repo dependency interface.
+// It stores a single token in memory.
+// SaveToken overwrites the stored token.
+// GetToken returns the stored token.
+// HealthCheck always returns nil.
+// DeleteToken is a no-op.
+type mockRepo struct {
+	token *URLToken
+}
+
+func (m *mockRepo) HealthCheck(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockRepo) SaveToken(cxt context.Context, token URLToken) error {
+	m.token = &token
+	return nil
+}
+
+func (m *mockRepo) GetToken(ctx context.Context, tokenStr string) (URLToken, error) {
+	return *m.token, nil
+}
+
+func (m *mockRepo) DeleteToken(ctx context.Context, tokenStr string) error {
+	return nil
+}
+
+// mockCache implements cache dependecy interface.
+// It stores a single token in memory.
+// SaveToken overwrites the stored token.
+// GetToken returns the stored token.
+// HealthCheck always returns nil.
+// DeleteToken is a no-op.
+type mockCache struct {
+	token *URLToken
+}
+
+func (m *mockCache) HealthCheck(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockCache) SaveToken(ctx context.Context, token URLToken, ttl time.Duration) error {
+	m.token = &token
+	return nil
+}
+
+func (m *mockCache) GetToken(ctx context.Context, tokenStr string) (URLToken, bool, error) {
+	return *m.token, true, nil
+}
+
+func (m *mockCache) DeleteToken(ctx context.Context, tokenStr string) error {
+	return nil
 }

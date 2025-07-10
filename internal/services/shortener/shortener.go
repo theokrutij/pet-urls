@@ -12,6 +12,7 @@ import (
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/rs/zerolog"
+
 	xcontext "github.com/theokrutij/pet-urls/internal/context"
 )
 
@@ -311,6 +312,7 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 		Msg("createToken: starting")
 	var output URLToken
 
+	// URL
 	httpURL, err := normalizeHTTP(string(input.URL))
 	if err != nil {
 		logger.Warn().
@@ -321,13 +323,7 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 	}
 	output.URL = httpURL
 
-	if utf8.RuneCountInString(input.Token) > 64 {
-		logger.Warn().
-			Str("token", input.Token).
-			Msg("createToken: token too long")
-		return output, ErrInvalidToken
-	}
-
+	// TTL
 	var ttl time.Duration
 	if input.TTL > 0 {
 		ttl = input.TTL
@@ -340,6 +336,13 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 	exp := time.Now().UTC().Add(ttl)
 	output.ExpiresAt = &exp
 
+	// Token
+	if utf8.RuneCountInString(input.Token) > 64 {
+		logger.Warn().
+			Str("token", input.Token).
+			Msg("createToken: token too long")
+		return output, ErrInvalidToken
+	}
 	if input.Token != "" {
 		output.Token = Token(input.Token)
 	} else {
@@ -351,10 +354,11 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 			return output, fmt.Errorf("generating random token: %w", err)
 		}
 	}
+
+	// OwnerID
 	output.OwnerID = input.OwnerID
 
 	// Save to database
-	// NOTE: token collision treated as critical error, p ≈ 5.42e-20
 	err = s.repo.SaveToken(ctx, output)
 	if isNotUniqueError(err) {
 		logger.Debug().
@@ -369,7 +373,7 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 		return output, fmt.Errorf("saving to repo: %w", err)
 	}
 
-	// Storing new token in cache, ignoring errors for now
+	// Save to cache
 	err = s.cache.SaveToken(ctx, output, s.cacheTTL)
 	if err != nil {
 		logger.Warn().

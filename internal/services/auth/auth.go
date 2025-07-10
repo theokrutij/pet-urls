@@ -100,6 +100,8 @@ func applyConfig(a *auth, c Config) *auth {
 	return a
 }
 
+// ------- Public methods ------
+
 func (a *auth) HealthCheck(ctx context.Context) error {
 	logger := a.loggerWithRequestID(ctx)
 	if err := a.repo.HealthCheck(ctx); err != nil {
@@ -113,6 +115,7 @@ func (a *auth) HealthCheck(ctx context.Context) error {
 
 func (a *auth) Register(ctx context.Context, login, password string) error {
 	logger := a.loggerWithRequestID(ctx)
+
 	if len(login) > 64 {
 		logger.Info().
 			Str("login", login).
@@ -125,6 +128,7 @@ func (a *auth) Register(ctx context.Context, login, password string) error {
 			Msg("Register: invalid password")
 		return fmt.Errorf("auth, hashing password: %w", ErrInvalidPassword)
 	}
+
 	userID, err := a.repo.SaveUser(ctx, UserInRepo{Login: login, PasswordHash: passwordHash})
 	if isNotUniqueError(err) {
 		logger.Info().
@@ -141,22 +145,12 @@ func (a *auth) Register(ctx context.Context, login, password string) error {
 	logger.Info().
 		Str("user_id", userID.String()).
 		Msg("Register: success")
-
 	return nil
-}
-
-type NotUniqueError interface {
-	error
-	NotUnique() bool
-}
-
-func isNotUniqueError(err error) bool {
-	var nuErr NotUniqueError
-	return errors.As(err, &nuErr) && nuErr.NotUnique()
 }
 
 func (a *auth) Login(ctx context.Context, login, password string) (RefreshToken, AccessToken, error) {
 	logger := a.loggerWithRequestID(ctx)
+
 	user, err := a.repo.GetUser(ctx, login)
 	if isNotFoundError(err) {
 		logger.Warn().
@@ -193,56 +187,7 @@ func (a *auth) Login(ctx context.Context, login, password string) (RefreshToken,
 	logger.Info().
 		Str("login", login).
 		Msg("Login: success")
-
 	return refreshToken, accessToken, nil
-}
-
-type NotFoundError interface {
-	error
-	NotFound() bool
-}
-
-func isNotFoundError(err error) bool {
-	var nfErr NotFoundError
-	return errors.As(err, &nfErr) && nfErr.NotFound()
-}
-
-func (a *auth) issueRefreshToken(ctx context.Context, userID UserID) (RefreshToken, error) {
-	tokenUUID, err := uuid.NewRandom()
-	if err != nil { // crypto/rand failure, extremely rare
-		return nil, err
-	}
-
-	refreshToken := RefreshToken(tokenUUID[:])
-
-	tokenModel := RefreshTokenInRepo{
-		Hash:      hashToken(refreshToken),
-		UserID:    userID,
-		ExpiresAt: time.Now().UTC().Add(a.refreshTokenTTL),
-	}
-	if err := a.repo.SaveRefreshToken(ctx, tokenModel); err != nil {
-		return nil, fmt.Errorf("saving new refresh token to repo")
-	}
-
-	return refreshToken, nil
-}
-
-func (a *auth) issueAccessToken(userID UserID) (AccessToken, error) {
-	claims := claims{
-		UserID:    userID,
-		ExpiresAt: time.Now().Add(a.accessTokenTTL),
-	}
-	accessToken, err := generateJWT(claims, a.keyFunc)
-	if err != nil {
-		return nil, fmt.Errorf("generating JWT")
-	}
-
-	return accessToken, nil
-}
-
-type claims struct {
-	UserID    UserID
-	ExpiresAt time.Time
 }
 
 func (a *auth) Logout(ctx context.Context, tokenCandidate []byte) error {
@@ -323,6 +268,63 @@ func (a *auth) Authenticate(ctx context.Context, tokenCandidate []byte) (UserID,
 }
 
 func (a *auth) RefreshTokenTTL() time.Duration { return a.refreshTokenTTL }
+
+// ------- Token management utils -------
+
+func (a *auth) issueRefreshToken(ctx context.Context, userID UserID) (RefreshToken, error) {
+	tokenUUID, err := uuid.NewRandom()
+	if err != nil { // crypto/rand failure, extremely rare
+		return nil, err
+	}
+
+	refreshToken := RefreshToken(tokenUUID[:])
+
+	tokenModel := RefreshTokenInRepo{
+		Hash:      hashToken(refreshToken),
+		UserID:    userID,
+		ExpiresAt: time.Now().UTC().Add(a.refreshTokenTTL),
+	}
+	if err := a.repo.SaveRefreshToken(ctx, tokenModel); err != nil {
+		return nil, fmt.Errorf("saving new refresh token to repo")
+	}
+
+	return refreshToken, nil
+}
+
+func (a *auth) issueAccessToken(userID UserID) (AccessToken, error) {
+	claims := JWTclaims{
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(a.accessTokenTTL),
+	}
+	accessToken, err := generateJWT(claims, a.keyFunc)
+	if err != nil {
+		return nil, fmt.Errorf("generating JWT")
+	}
+
+	return accessToken, nil
+}
+
+// ------- Error type checkers -------
+
+func isNotUniqueError(err error) bool {
+	type NotUniqueError interface {
+		error
+		NotUnique() bool
+	}
+	var nuErr NotUniqueError
+
+	return errors.As(err, &nuErr) && nuErr.NotUnique()
+}
+
+func isNotFoundError(err error) bool {
+	type NotFoundError interface {
+		error
+		NotFound() bool
+	}
+	var nfErr NotFoundError
+
+	return errors.As(err, &nfErr) && nfErr.NotFound()
+}
 
 // ------- Context utils -------
 
