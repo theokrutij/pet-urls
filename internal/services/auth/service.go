@@ -13,9 +13,14 @@ type Service interface {
 		Creates new user represented by userID.
 
 		If successful, returns nil.
-		If login cannot be used, returns ErrInvalidLogin.
-		If password cannot be used, returns ErrInvalidPassword.
-		If login is not unique, returns ErrLoginNotUnique
+		If login is not unique, returns ErrLoginNotUnique.
+		If login cannot be used, returns ErrInvalidLogin,
+		else if password cannot be used, returns ErrInvalidPassword.
+
+		Login requirements:
+			- length <= 64 characters
+		Password requirements:
+			- length <= 72 bytes
 	*/
 	Register(ctx context.Context, login, password string) error
 	/*
