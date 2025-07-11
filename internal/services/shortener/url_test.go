@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// TODO: update test suite
 func TestNormalizeHTTP_ValidInputs(t *testing.T) {
 	tests := []struct {
 		name string
@@ -65,6 +64,8 @@ func TestToHTTPURL_InvalidInputs(t *testing.T) {
 		{"mailto", "mailto:someone@example.com"},
 		{"ftp", "ftp://example.com"},
 		{"relative_url", "//example.com"},
+
+		{"opaque instead of host", "http:ya.ru/example"},
 
 		{"leading dot", ".a"},
 
