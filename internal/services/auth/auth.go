@@ -13,6 +13,11 @@ import (
 	xcontext "github.com/theokrutij/pet-urls/internal/context"
 )
 
+const (
+	defaultRefreshTokenTTL = time.Hour * 24 * 7
+	defaultAccessTokenTTL  = time.Minute * 15
+)
+
 var (
 	ErrInvalidLogin       = errors.New("invalid login")
 	ErrInvalidPassword    = errors.New("invalid password")
@@ -84,13 +89,13 @@ func New(deps Dependencies, config Config) Service {
 
 func applyConfig(a *auth, c Config) *auth {
 	if c.RefreshTokenTTL == 0 {
-		a.refreshTokenTTL = 7 * 24 * time.Hour
+		a.refreshTokenTTL = defaultRefreshTokenTTL
 	} else {
 		a.refreshTokenTTL = c.RefreshTokenTTL
 	}
 
 	if c.AccessTokenTTL == 0 {
-		a.accessTokenTTL = 15 * time.Minute
+		a.accessTokenTTL = defaultAccessTokenTTL
 	} else {
 		a.accessTokenTTL = c.AccessTokenTTL
 	}
