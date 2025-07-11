@@ -24,9 +24,6 @@ var (
 	ErrLoginNotUnique     = errors.New("login not unique")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidToken       = errors.New("invalid token")
-
-	// used internally to wrap jwt-specific error
-	errJWTExpired = errors.New("JWT expired")
 )
 
 type UserID []byte
@@ -261,15 +258,24 @@ func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken,
 func (a *auth) Authenticate(ctx context.Context, tokenCandidate []byte) (UserID, error) {
 	logger := a.loggerWithRequestID(ctx)
 
-	userID, err := parseJWT(string(tokenCandidate), a.keyFunc)
-	if errors.Is(err, errJWTExpired) {
-		logger.Warn().
-			Msg("Authenticate: attempted to authenticate with expired JWT")
-		return nil, fmt.Errorf("auth, validating access token: %w", ErrInvalidToken)
-	} else if err != nil {
+	claims, err := parseJWT(string(tokenCandidate), a.keyFunc)
+	if err != nil {
 		logger.Warn().
 			Msg("Authenticate: attempted to authenticate with invalid JWT")
-		return nil, fmt.Errorf("auth, validating access token: :%w", ErrInvalidToken)
+		return nil, fmt.Errorf("auth, parsing tokenCandidate: %w", ErrInvalidToken)
+	}
+
+	if claims.ExpiresAt.Before(time.Now()) {
+		logger.Warn().
+			Msg("Authenticate: attempted to authenticate with expired JWT")
+		return nil, fmt.Errorf("auth, validation tokenCandidate: %w", ErrInvalidToken)
+	}
+
+	userID, err := userIDfromBase64(claims.UserID)
+	if err != nil {
+		logger.Warn().
+			Msg("Authenticate: attempted to authenticate with invalid JWT claim encoding")
+		return nil, fmt.Errorf("auth, parsing userID: %w", ErrInvalidToken)
 	}
 
 	logger.Info().

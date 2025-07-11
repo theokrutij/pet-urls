@@ -30,26 +30,29 @@ func generateJWT(claims JWTclaims, keyFunc func() []byte) ([]byte, error) {
 	return []byte(ss), nil
 }
 
-func parseJWT(tokenCandidate string, keyFunc func() []byte) (UserID, error) {
+func parseJWT(tokenCandidate string, keyFunc func() []byte) (*JWTclaims, error) {
 	opts := []jwt.ParserOption{
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
-		jwt.WithExpirationRequired(),
+		jwt.WithoutClaimsValidation(),
 	}
 	kf := func(t *jwt.Token) (any, error) { return keyFunc(), nil }
 	token, err := jwt.Parse(tokenCandidate, kf, opts...)
-	if errors.Is(err, jwt.ErrTokenExpired) {
-		return nil, errJWTExpired
-	} else if err != nil {
-		return nil, err
-	}
-	userIDAsBase64, err := token.Claims.GetSubject()
-	if err != nil {
-		return nil, err
-	}
-	userID, err := userIDfromBase64(userIDAsBase64)
 	if err != nil {
 		return nil, err
 	}
 
-	return userID, nil
+	output := new(JWTclaims)
+
+	userIDAsBase64, err := token.Claims.GetSubject()
+	if err != nil {
+		return nil, err
+	}
+	output.UserID = userIDAsBase64
+	exp, err := token.Claims.GetExpirationTime()
+	if err != nil {
+		return nil, err
+	}
+	output.ExpiresAt = exp.Time
+
+	return output, nil
 }
