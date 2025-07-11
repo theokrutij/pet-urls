@@ -3,19 +3,23 @@ package auth
 import (
 	"errors"
 	"time"
+	"unicode/utf8"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type JWTclaims struct {
-	UserID    UserID
+	UserID    string
 	ExpiresAt time.Time
 }
 
 func generateJWT(claims JWTclaims, keyFunc func() []byte) ([]byte, error) {
+	if !utf8.ValidString(claims.UserID) {
+		return nil, errors.New("generateJWT: UserID must be a valid utf-8 string")
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		ExpiresAt: jwt.NewNumericDate(claims.ExpiresAt),
-		Subject:   string(claims.UserID),
+		Subject:   claims.UserID,
 	})
 
 	ss, err := token.SignedString(keyFunc())
@@ -38,10 +42,14 @@ func parseJWT(tokenCandidate string, keyFunc func() []byte) (UserID, error) {
 	} else if err != nil {
 		return nil, err
 	}
-	userIDStr, err := token.Claims.GetSubject()
+	userIDAsBase64, err := token.Claims.GetSubject()
+	if err != nil {
+		return nil, err
+	}
+	userID, err := userIDfromBase64(userIDAsBase64)
 	if err != nil {
 		return nil, err
 	}
 
-	return UserID(userIDStr), nil
+	return userID, nil
 }

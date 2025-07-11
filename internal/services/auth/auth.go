@@ -31,8 +31,14 @@ var (
 
 type UserID []byte
 
-func (id UserID) String() string {
+// converts UserID into base64 url-encoded string
+func (id UserID) toBase64() string {
 	return base64.RawURLEncoding.EncodeToString(id)
+}
+
+// decodes base64 url-encoded string into UserID
+func userIDfromBase64(s string) (UserID, error) {
+	return base64.RawURLEncoding.DecodeString(s)
 }
 
 type PasswordHash []byte
@@ -148,7 +154,7 @@ func (a *auth) Register(ctx context.Context, login, password string) error {
 	}
 
 	logger.Info().
-		Str("user_id", userID.String()).
+		Str("user_id", userID.toBase64()).
 		Msg("Register: success")
 	return nil
 }
@@ -298,7 +304,7 @@ func (a *auth) issueRefreshToken(ctx context.Context, userID UserID) (RefreshTok
 
 func (a *auth) issueAccessToken(userID UserID) (AccessToken, error) {
 	claims := JWTclaims{
-		UserID:    userID,
+		UserID:    userID.toBase64(),
 		ExpiresAt: time.Now().Add(a.accessTokenTTL),
 	}
 	accessToken, err := generateJWT(claims, a.keyFunc)
