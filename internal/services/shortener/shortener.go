@@ -279,10 +279,17 @@ func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, requesting
 	}
 
 	repoErr := s.repo.DeleteToken(ctx, tokenStr)
-	if repoErr != nil {
+	if isNotFoundError(repoErr) {
+		logger.Info().
+			Str("token", tokenStr).
+			Str("user_id", token.OwnerID.String()).
+			Msg("DeleteToken: token doesn't exist, returning ok")
+		return nil
+	} else if repoErr != nil {
 		logger.Error().
 			Err(repoErr).
 			Msg("DeleteToken: failed to delete token from repo")
+		return fmt.Errorf("shortener, deleting token: %w", repoErr)
 	}
 
 	logger.Info().
