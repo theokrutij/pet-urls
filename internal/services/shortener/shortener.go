@@ -20,7 +20,7 @@ import (
 
 const (
 	defaultTokenTTL    = 1 * time.Hour
-	defaultCacheTTL    = 10 * time.Minute
+	defaultMaxCacheTTL = 10 * time.Minute
 	defaultTokenLength = 8
 )
 
@@ -77,7 +77,7 @@ type shortener struct {
 	cache cache
 
 	// config parameters
-	cacheTTL           time.Duration
+	maxCacheTTL        time.Duration
 	tokenTTL           time.Duration
 	tokenDecodedLength int
 	logger             zerolog.Logger
@@ -97,9 +97,9 @@ func New(deps Dependencies, config Config) Service {
 
 func applyConfig(s *shortener, c Config) *shortener {
 	if c.CacheTTL == 0 {
-		s.cacheTTL = defaultCacheTTL
+		s.maxCacheTTL = defaultMaxCacheTTL
 	} else {
-		s.cacheTTL = c.CacheTTL
+		s.maxCacheTTL = c.CacheTTL
 	}
 
 	if c.TokenTTL == 0 {
@@ -160,24 +160,17 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 	logger := s.loggerWithRequestID(ctx)
 
 	// Check the cache first
-	token, ok, cacheErr := s.cache.GetToken(ctx, tokenStr)
+	url, ok, cacheErr := s.cache.GetToken(ctx, tokenStr)
 	if cacheErr != nil {
 		logger.Warn().
 			Err(cacheErr).
 			Msg("ResolveToken: failed to fetch token from cache")
 	} else if ok {
-		if token.ExpiresAt.Before(time.Now()) {
-			logger.Info().
-				Str("token", string(token.Token)).
-				Time("exp", token.ExpiresAt).
-				Msg("Requested token expired")
-			return "", fmt.Errorf("shortener, fetching token from cache: %w, token=%s", ErrTokenExpired, token.Token)
-		}
 		logger.Info().
-			Str("token", string(token.Token)).
-			Str("url", string(token.URL)).
+			Str("token", tokenStr).
+			Str("url", string(url)).
 			Msg("ResolveToken: cache hit, success")
-		return token.URL, nil
+		return URL(url), nil
 	}
 
 	// If not found in cache, retrieve from the database
@@ -203,7 +196,7 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 	}
 
 	// Update cache
-	cacheErr = s.cache.SaveToken(ctx, token, s.cacheTTL)
+	cacheErr = s.cache.SaveToken(ctx, token.Token, token.URL, min(s.maxCacheTTL, time.Until(token.ExpiresAt)))
 	if cacheErr != nil {
 		logger.Warn().
 			Err(cacheErr).
@@ -277,7 +270,6 @@ func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, requesting
 		return fmt.Errorf("shortener, deleting token: %w", ErrNotTokenOwner)
 	}
 
-	// TODO: handle cache failure
 	cacheErr := s.cache.DeleteToken(ctx, tokenStr)
 	if cacheErr != nil {
 		logger.Error().
@@ -389,7 +381,7 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 	}
 
 	// Save to cache
-	err = s.cache.SaveToken(ctx, output, s.cacheTTL)
+	err = s.cache.SaveToken(ctx, output.Token, output.URL, min(s.maxCacheTTL, time.Until(output.ExpiresAt)))
 	if err != nil {
 		logger.Warn().
 			Str("token", string(output.Token)).

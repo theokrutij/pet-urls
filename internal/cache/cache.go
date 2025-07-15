@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -32,11 +31,6 @@ func New(ctx context.Context, config *Config) *cache {
 	}
 }
 
-type tokenAsCacheValue struct {
-	URL string    `json:"url"`
-	Exp time.Time `json:"exp"`
-}
-
 func (c *cache) HealthCheck(ctx context.Context) error {
 	pong, err := c.rdb.Ping(ctx).Result()
 	if err != nil {
@@ -49,39 +43,21 @@ func (c *cache) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-func (c *cache) SaveToken(ctx context.Context, token shortener.URLToken, ttl time.Duration) error {
-	tcv := tokenAsCacheValue{
-		URL: string(token.URL),
-		Exp: token.ExpiresAt,
-	}
-
-	b, err := json.Marshal(tcv)
-	if err != nil {
-		return err
-	}
-
-	return c.set(ctx, string(token.Token), string(b), ttl)
+func (c *cache) SaveToken(ctx context.Context, token shortener.Token, url shortener.URL, ttl time.Duration) error {
+	return c.set(ctx, string(token), string(url), ttl)
 }
 
-func (c *cache) GetToken(ctx context.Context, tokenStr string) (shortener.URLToken, bool, error) {
-	var token shortener.URLToken
-	cacheValue, err := c.get(ctx, tokenStr)
+func (c *cache) GetToken(ctx context.Context, tokenStr string) (shortener.URL, bool, error) {
+	v, err := c.get(ctx, tokenStr)
+	url := shortener.URL(v)
 	if errors.Is(err, redis.Nil) {
-		return token, false, nil
+		return url, false, nil
 	}
 	if err != nil {
-		return token, false, err
+		return url, false, err
 	}
 
-	var tcv tokenAsCacheValue
-	err = json.Unmarshal([]byte(cacheValue), &tcv)
-	if err != nil {
-		return token, true, err
-	}
-
-	token.URL = shortener.URL(tcv.URL)
-	token.ExpiresAt = tcv.Exp
-	return token, true, nil
+	return url, true, nil
 }
 
 func (c *cache) DeleteToken(ctx context.Context, tokenStr string) error {
