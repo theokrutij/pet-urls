@@ -50,13 +50,10 @@ func (s *server) handleGenerateURLToken(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	response := &responseSchema{ShortURL: string(token.Token)}
-
 	// timestamp format: yyyy-mm-ddThh:mm:ssZ
 	// time returned in the UTC tz
-	if token.ExpiresAt != nil {
-		response.ValidUntil = token.ExpiresAt.Format(time.RFC3339)
-	}
+	response := &responseSchema{ShortURL: string(token.Token), ValidUntil: token.ExpiresAt.Format(time.RFC3339)}
+
 	writeResponseAsJSON(w, response, 201)
 }
 
@@ -124,7 +121,7 @@ func (s *server) handleCreateTokenWithOwner(w http.ResponseWriter, r *http.Reque
 
 	response := responseSchema{
 		Token:     token.Token,
-		ExpiresAt: *token.ExpiresAt,
+		ExpiresAt: token.ExpiresAt,
 	}
 
 	writeResponseAsJSON(w, response, 201)

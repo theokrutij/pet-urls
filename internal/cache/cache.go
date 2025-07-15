@@ -33,8 +33,8 @@ func New(ctx context.Context, config *Config) *cache {
 }
 
 type tokenAsCacheValue struct {
-	URL string     `json:"url"`
-	Exp *time.Time `json:"exp,omitempty"`
+	URL string    `json:"url"`
+	Exp time.Time `json:"exp"`
 }
 
 func (c *cache) HealthCheck(ctx context.Context) error {

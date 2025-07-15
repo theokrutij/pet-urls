@@ -48,7 +48,7 @@ func (id ID) String() string {
 type URLToken struct {
 	Token     Token
 	URL       URL
-	ExpiresAt *time.Time
+	ExpiresAt time.Time
 	OwnerID   ID
 }
 
@@ -148,7 +148,7 @@ func (s *shortener) GenerateToken(ctx context.Context, rawURL string) (URLToken,
 		logger.Info().
 			Str("token", string(output.Token)).
 			Str("url", string(output.URL)).
-			Time("expires_at", *output.ExpiresAt).
+			Time("expires_at", output.ExpiresAt).
 			Msg("GenerateToken: success")
 	}
 
@@ -169,7 +169,7 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 		if token.ExpiresAt.Before(time.Now()) {
 			logger.Info().
 				Str("token", string(token.Token)).
-				Time("exp", *token.ExpiresAt).
+				Time("exp", token.ExpiresAt).
 				Msg("Requested token expired")
 			return "", fmt.Errorf("shortener, fetching token from cache: %w, token=%s", ErrTokenExpired, token.Token)
 		}
@@ -193,7 +193,7 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 	if token.ExpiresAt.Before(time.Now()) {
 		logger.Info().
 			Str("token", string(token.Token)).
-			Time("exp", *token.ExpiresAt).
+			Time("exp", token.ExpiresAt).
 			Msg("Requested token expired")
 		return "", fmt.Errorf("shortener.GetOriginalURL: %w", ErrTokenExpired)
 	}
@@ -240,7 +240,7 @@ func (s *shortener) CreateTokenWithOwner(ctx context.Context, input CreateTokenI
 			Str("token", string(output.Token)).
 			Str("url", string(output.URL)).
 			Str("owner_id", string(output.OwnerID)).
-			Time("expires_at", *output.ExpiresAt).
+			Time("expires_at", output.ExpiresAt).
 			Msg("CreateTokenWithOwner: success")
 	}
 
@@ -345,8 +345,7 @@ func (s *shortener) createToken(ctx context.Context, input CreateTokenInput) (UR
 			Msg("createToken: setting default token TTL")
 		ttl = s.tokenTTL
 	}
-	exp := time.Now().UTC().Add(ttl)
-	output.ExpiresAt = &exp
+	output.ExpiresAt = time.Now().UTC().Add(ttl)
 
 	// Token
 	if utf8.RuneCountInString(input.Token) > 64 {
