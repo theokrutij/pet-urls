@@ -86,6 +86,10 @@ type shortener struct {
 // ------- Constructor --------
 
 func New(deps Dependencies, config Config) Service {
+	if deps.Repo == nil || deps.Cache == nil {
+		panic("Got nil instead of dependency")
+	}
+
 	s := &shortener{repo: deps.Repo, cache: deps.Cache}
 	s = applyConfig(s, config)
 	return s

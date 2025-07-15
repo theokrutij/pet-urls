@@ -81,6 +81,10 @@ type Config struct {
 }
 
 func New(deps Dependencies, config Config) Service {
+	if deps.Repo == nil || deps.KeyFunc == nil {
+		panic("Got nil instead of dependency")
+	}
+
 	a := &auth{
 		repo:    deps.Repo,
 		keyFunc: deps.KeyFunc,

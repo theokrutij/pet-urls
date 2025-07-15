@@ -52,6 +52,10 @@ type Config struct {
 }
 
 func NewServer(deps Dependencies, config Config) (*server, error) {
+	if deps.Shortener == nil || deps.Auth == nil {
+		panic("Got nil instead of dependency")
+	}
+
 	server := &server{
 		s:         &http.Server{},
 		shortener: deps.Shortener,
