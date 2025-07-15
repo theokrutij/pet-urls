@@ -271,8 +271,8 @@ func (s *shortener) DeleteToken(ctx context.Context, tokenStr string, requesting
 	if !bytes.Equal(token.OwnerID, requestingUserID) {
 		logger.Warn().
 			Str("token", tokenStr).
-			Str("requesting_user_id", string(requestingUserID)).
-			Str("owner_id", string(token.OwnerID)).
+			Str("requesting_user_id", ID(requestingUserID).String()).
+			Str("owner_id", token.OwnerID.String()).
 			Msg("DeleteToken: non-onwer attempted deleting token")
 		return fmt.Errorf("shortener, deleting token: %w", ErrNotTokenOwner)
 	}
