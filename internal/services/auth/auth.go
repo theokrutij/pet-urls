@@ -39,7 +39,7 @@ func userIDfromBase64(s string) (UserID, error) {
 }
 
 type PasswordHash []byte
-type AccessToken []byte
+type AccessToken string
 type RefreshToken []byte
 
 type TokenHash []byte
@@ -168,32 +168,32 @@ func (a *auth) Login(ctx context.Context, login, password string) (RefreshToken,
 		logger.Warn().
 			Str("login", login).
 			Msg("Attempting to log in with non-existing login")
-		return nil, nil, fmt.Errorf("auth, fetching user from repo: %w", ErrInvalidCredentials)
+		return nil, "", fmt.Errorf("auth, fetching user from repo: %w", ErrInvalidCredentials)
 	} else if err != nil {
 		logger.Error().
 			Msg("Login: failed to fetch login from repo")
-		return nil, nil, fmt.Errorf("auth, fetching user from repo failed")
+		return nil, "", fmt.Errorf("auth, fetching user from repo failed")
 	}
 
 	if !passwordMatchesHash(password, user.PasswordHash) {
 		logger.Warn().
 			Str("login", login).
 			Msg("Attempting to log in with incorrect password")
-		return nil, nil, fmt.Errorf("auth, validating password: %w", ErrInvalidCredentials)
+		return nil, "", fmt.Errorf("auth, validating password: %w", ErrInvalidCredentials)
 	}
 
 	refreshToken, err := a.issueRefreshToken(ctx, user.ID)
 	if err != nil {
 		logger.Error().
 			Msg("Login: failed to issue refresh token")
-		return nil, nil, fmt.Errorf("auth, issuing refresh token: %w", err)
+		return nil, "", fmt.Errorf("auth, issuing refresh token: %w", err)
 	}
 
 	accessToken, err := a.issueAccessToken(user.ID)
 	if err != nil {
 		logger.Error().
 			Msg("Login: failed to issue access token")
-		return nil, nil, fmt.Errorf("auth, issuing access token: %w", err)
+		return nil, "", fmt.Errorf("auth, issuing access token: %w", err)
 	}
 
 	logger.Info().
@@ -227,30 +227,30 @@ func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken,
 	if isNotFoundError(err) {
 		logger.Warn().
 			Msg("Refresh: attempted to refresh access token with non-existing token")
-		return nil, fmt.Errorf("auth, fetching refresh token: %w", ErrInvalidToken)
+		return "", fmt.Errorf("auth, fetching refresh token: %w", ErrInvalidToken)
 	} else if err != nil {
 		logger.Error().
 			Msg("Refresh: failed to fetch refresh token from repo")
-		return nil, fmt.Errorf("auth, fetching refresh token failed")
+		return "", fmt.Errorf("auth, fetching refresh token failed")
 	}
 
 	if refreshToken.RevokedAt != nil {
 		logger.Warn().
 			Msg("Refresh: attempted to refresh access token with revoked token")
-		return nil, fmt.Errorf("auth, refreshing token: %w", ErrInvalidToken)
+		return "", fmt.Errorf("auth, refreshing token: %w", ErrInvalidToken)
 	}
 
 	if refreshToken.ExpiresAt.Before(time.Now()) {
 		logger.Warn().
 			Msg("Refresh: attempted to refresh access token with expired token")
-		return nil, fmt.Errorf("auth, refreshing token: %w", ErrInvalidToken)
+		return "", fmt.Errorf("auth, refreshing token: %w", ErrInvalidToken)
 	}
 
 	accessToken, err := a.issueAccessToken(refreshToken.UserID)
 	if err != nil {
 		logger.Error().
 			Msg("Refresh: failed to issue access token")
-		return nil, fmt.Errorf("auth, issuing access token: %w", err)
+		return "", fmt.Errorf("auth, issuing access token: %w", err)
 	}
 
 	logger.Info().
@@ -259,10 +259,10 @@ func (a *auth) Refresh(ctx context.Context, tokenCandidate []byte) (AccessToken,
 	return accessToken, nil
 }
 
-func (a *auth) Authenticate(ctx context.Context, tokenCandidate []byte) (UserID, error) {
+func (a *auth) Authenticate(ctx context.Context, tokenCandidate string) (UserID, error) {
 	logger := a.loggerWithRequestID(ctx)
 
-	claims, err := parseJWT(string(tokenCandidate), a.keyFunc)
+	claims, err := parseJWT(tokenCandidate, a.keyFunc)
 	if err != nil {
 		logger.Warn().
 			Msg("Authenticate: attempted to authenticate with invalid JWT")
@@ -319,10 +319,10 @@ func (a *auth) issueAccessToken(userID UserID) (AccessToken, error) {
 	}
 	accessToken, err := generateJWT(claims, a.keyFunc)
 	if err != nil {
-		return nil, fmt.Errorf("generating JWT")
+		return "", fmt.Errorf("generating JWT")
 	}
 
-	return accessToken, nil
+	return AccessToken(accessToken), nil
 }
 
 // ------- Error type checkers -------

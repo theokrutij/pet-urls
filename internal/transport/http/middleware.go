@@ -132,7 +132,7 @@ func (s *server) requiresAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		userID, err := s.auth.Authenticate(r.Context(), []byte(token))
+		userID, err := s.auth.Authenticate(r.Context(), token)
 		if errors.Is(err, auth.ErrInvalidToken) {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return

@@ -52,7 +52,7 @@ type Service interface {
 		If accessToken was issued by a user session that is active, returns associated userID.
 		If accessToken is not valid, returns ErrInvalidToken.
 	*/
-	Authenticate(ctx context.Context, tokenCandidate []byte) (userID UserID, err error)
+	Authenticate(ctx context.Context, tokenCandidate string) (userID UserID, err error)
 
 	// RefreshTokenTTL returns the refresh token TTL.
 	RefreshTokenTTL() time.Duration

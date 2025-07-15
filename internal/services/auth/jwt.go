@@ -13,9 +13,9 @@ type JWTclaims struct {
 	ExpiresAt time.Time
 }
 
-func generateJWT(claims JWTclaims, keyFunc func() []byte) ([]byte, error) {
+func generateJWT(claims JWTclaims, keyFunc func() []byte) (string, error) {
 	if !utf8.ValidString(claims.UserID) {
-		return nil, errors.New("generateJWT: UserID must be a valid utf-8 string")
+		return "", errors.New("generateJWT: UserID must be a valid utf-8 string")
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		ExpiresAt: jwt.NewNumericDate(claims.ExpiresAt),
@@ -24,10 +24,10 @@ func generateJWT(claims JWTclaims, keyFunc func() []byte) ([]byte, error) {
 
 	ss, err := token.SignedString(keyFunc())
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return []byte(ss), nil
+	return ss, nil
 }
 
 func parseJWT(tokenCandidate string, keyFunc func() []byte) (*JWTclaims, error) {

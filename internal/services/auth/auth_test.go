@@ -451,12 +451,12 @@ func TestRefresh(t *testing.T) {
 func TestAuthenticate(t *testing.T) {
 	tests := []struct {
 		name                string
-		setupTokenCandidate func(userID UserID) []byte
+		setupTokenCandidate func(userID UserID) string
 		wantErr             error
 	}{
 		{
 			name: "valid token",
-			setupTokenCandidate: func(userID UserID) []byte {
+			setupTokenCandidate: func(userID UserID) string {
 				jwt, _ := generateJWT(
 					JWTclaims{
 						UserID:    userID.toBase64(),
@@ -469,7 +469,7 @@ func TestAuthenticate(t *testing.T) {
 		},
 		{
 			name: "malformed token",
-			setupTokenCandidate: func(userID UserID) []byte {
+			setupTokenCandidate: func(userID UserID) string {
 				jwt, _ := generateJWT(
 					JWTclaims{
 						UserID:    userID.toBase64(),
@@ -478,8 +478,7 @@ func TestAuthenticate(t *testing.T) {
 					mockKeyFunc,
 				)
 
-				jwt = append([]byte("abcd"), jwt...)
-				jwt = append(jwt, []byte("abcd")...)
+				jwt = "abcd" + jwt + "abcd"
 
 				return jwt
 			},
@@ -487,7 +486,7 @@ func TestAuthenticate(t *testing.T) {
 		},
 		{
 			name: "tampered token",
-			setupTokenCandidate: func(userID UserID) []byte {
+			setupTokenCandidate: func(userID UserID) string {
 				jwt, _ := generateJWT(
 					JWTclaims{
 						UserID:    userID.toBase64(),
@@ -496,14 +495,13 @@ func TestAuthenticate(t *testing.T) {
 					mockKeyFunc,
 				)
 
-				tampered := tamperJWTClaims(string(jwt))
-				return []byte(tampered)
+				return tamperJWTClaims(string(jwt))
 			},
 			wantErr: ErrInvalidToken,
 		},
 		{
 			name: "expired token",
-			setupTokenCandidate: func(userID UserID) []byte {
+			setupTokenCandidate: func(userID UserID) string {
 				jwt, _ := generateJWT(
 					JWTclaims{
 						UserID:    userID.toBase64(),
