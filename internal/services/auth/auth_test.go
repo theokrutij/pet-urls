@@ -40,29 +40,31 @@ func TestHealthCheck(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		// setup
-		testCtx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		t.Run(tt.name, func(t *testing.T) {
+			// setup
+			testCtx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-		repo := new(mockRepo)
-		repo.On("HealthCheck", mock.Anything).Return(tt.repoErr)
+			repo := new(mockRepo)
+			repo.On("HealthCheck", mock.Anything).Return(tt.repoErr)
 
-		testAuth := New(
-			Dependencies{Repo: repo, KeyFunc: mockKeyFunc},
-			Config{},
-		)
+			testAuth := New(
+				Dependencies{Repo: repo, KeyFunc: mockKeyFunc},
+				Config{},
+			)
 
-		// execution
-		gotErr := testAuth.HealthCheck(testCtx)
+			// execution
+			gotErr := testAuth.HealthCheck(testCtx)
 
-		// assertions
-		repo.AssertCalled(t, "HealthCheck", testCtx)
+			// assertions
+			repo.AssertCalled(t, "HealthCheck", testCtx)
 
-		if tt.repoErr != nil {
-			assert.Error(t, gotErr)
-		} else {
-			assert.NoError(t, gotErr)
-		}
+			if tt.repoErr != nil {
+				assert.Error(t, gotErr)
+			} else {
+				assert.NoError(t, gotErr)
+			}
+		})
 	}
 }
 
@@ -228,67 +230,69 @@ func TestLogin(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		// setup
-		testCtx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		t.Run(tt.name, func(t *testing.T) {
+			// setup
+			testCtx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-		mockUUID := uuid.New()
-		mockUserID := UserID(mockUUID[:])
-		pwdHash, _ := hashPassword(validPassword)
+			mockUUID := uuid.New()
+			mockUserID := UserID(mockUUID[:])
+			pwdHash, _ := hashPassword(validPassword)
 
-		repo := new(mockRepo)
-		repo.On("GetUser", testCtx, tt.login).Return(
-			UserInRepo{
-				ID:           mockUserID,
-				Login:        tt.login,
-				PasswordHash: pwdHash,
-			},
-			tt.getUserErr,
-		)
-		var capturedTokenHash TokenHash
-		repo.
-			On("SaveRefreshToken", mock.Anything, mock.Anything).
-			Run(func(args mock.Arguments) { capturedTokenHash = args.Get(1).(RefreshTokenInRepo).Hash }).
-			Return(tt.saveTokenErr)
+			repo := new(mockRepo)
+			repo.On("GetUser", testCtx, tt.login).Return(
+				UserInRepo{
+					ID:           mockUserID,
+					Login:        tt.login,
+					PasswordHash: pwdHash,
+				},
+				tt.getUserErr,
+			)
+			var capturedTokenHash TokenHash
+			repo.
+				On("SaveRefreshToken", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) { capturedTokenHash = args.Get(1).(RefreshTokenInRepo).Hash }).
+				Return(tt.saveTokenErr)
 
-		testAuth := New(
-			Dependencies{Repo: repo, KeyFunc: mockKeyFunc},
-			Config{},
-		)
+			testAuth := New(
+				Dependencies{Repo: repo, KeyFunc: mockKeyFunc},
+				Config{},
+			)
 
-		// execution
-		gotRefreshToken, gotAccessToken, gotErr := testAuth.Login(testCtx, tt.login, tt.password)
+			// execution
+			gotRefreshToken, gotAccessToken, gotErr := testAuth.Login(testCtx, tt.login, tt.password)
 
-		// assertions
+			// assertions
 
-		repo.AssertCalled(t, "GetUser", testCtx, tt.login)
-		if tt.shouldCallSaveToken {
-			repo.AssertCalled(t, "SaveRefreshToken", testCtx, mock.MatchedBy(func(t RefreshTokenInRepo) bool {
-				ok := bytes.Equal(t.UserID, mockUserID)
-				ok = ok && time.Duration.Abs(time.Until(t.ExpiresAt)-defaultRefreshTokenTTL) < acceptableTimePrecision
-				return ok
-			}))
-		}
+			repo.AssertCalled(t, "GetUser", testCtx, tt.login)
+			if tt.shouldCallSaveToken {
+				repo.AssertCalled(t, "SaveRefreshToken", testCtx, mock.MatchedBy(func(t RefreshTokenInRepo) bool {
+					ok := bytes.Equal(t.UserID, mockUserID)
+					ok = ok && time.Duration.Abs(time.Until(t.ExpiresAt)-defaultRefreshTokenTTL) < acceptableTimePrecision
+					return ok
+				}))
+			}
 
-		if tt.wantErr != nil {
-			assert.ErrorIs(t, gotErr, tt.wantErr)
-		} else if tt.wantGenericErr {
-			assert.Error(t, gotErr)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, gotErr, tt.wantErr)
+			} else if tt.wantGenericErr {
+				assert.Error(t, gotErr)
 
-			assert.NotErrorIs(t, gotErr, ErrInvalidCredentials)
-		} else {
-			assert.NoError(t, gotErr)
+				assert.NotErrorIs(t, gotErr, ErrInvalidCredentials)
+			} else {
+				assert.NoError(t, gotErr)
 
-			assert.Equal(t, capturedTokenHash, hashToken(gotRefreshToken))
+				assert.Equal(t, capturedTokenHash, hashToken(gotRefreshToken))
 
-			claims, err := parseJWT(string(gotAccessToken), mockKeyFunc)
-			assert.NoError(t, err)
+				claims, err := parseJWT(string(gotAccessToken), mockKeyFunc)
+				assert.NoError(t, err)
 
-			userIDFromAccessToken, err := userIDfromBase64(claims.UserID)
-			assert.NoError(t, err)
+				userIDFromAccessToken, err := userIDfromBase64(claims.UserID)
+				assert.NoError(t, err)
 
-			assert.Equal(t, mockUserID, userIDFromAccessToken)
-		}
+				assert.Equal(t, mockUserID, userIDFromAccessToken)
+			}
+		})
 	}
 }
 
@@ -312,28 +316,30 @@ func TestLogout(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		//setup
-		testCtx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		t.Run(tt.name, func(t *testing.T) {
+			//setup
+			testCtx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-		tokenCandidate := []byte(validRefreshToken)
+			tokenCandidate := []byte(validRefreshToken)
 
-		repo := new(mockRepo)
-		repo.On("RevokeRefreshToken", testCtx, hashToken(tokenCandidate)).Return(tt.repoErr)
+			repo := new(mockRepo)
+			repo.On("RevokeRefreshToken", testCtx, hashToken(tokenCandidate)).Return(tt.repoErr)
 
-		testAuth := New(Dependencies{Repo: repo, KeyFunc: mockKeyFunc}, Config{})
+			testAuth := New(Dependencies{Repo: repo, KeyFunc: mockKeyFunc}, Config{})
 
-		// execution
-		err := testAuth.Logout(testCtx, tokenCandidate)
+			// execution
+			err := testAuth.Logout(testCtx, tokenCandidate)
 
-		// assertions
-		repo.AssertCalled(t, "RevokeRefreshToken", testCtx, hashToken(tokenCandidate))
+			// assertions
+			repo.AssertCalled(t, "RevokeRefreshToken", testCtx, hashToken(tokenCandidate))
 
-		if tt.wantErr {
-			assert.Error(t, err)
-		} else {
-			assert.NoError(t, err)
-		}
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 
 }
@@ -379,59 +385,60 @@ func TestRefresh(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		// setup
-		testCtx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		t.Run(tt.name, func(t *testing.T) {
+			// setup
+			testCtx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-		tokenCandidate := []byte(validRefreshToken)
-		mockUUID := uuid.New()
-		mockUserID := UserID(mockUUID[:])
-		tokenInRepo := RefreshTokenInRepo{}
-		if tt.repoErr == nil {
-			tokenInRepo.Hash = hashToken(tokenCandidate)
-			tokenInRepo.UserID = mockUserID
-			if tt.tokenInRepoExpired {
-				tokenInRepo.ExpiresAt = time.Now().Add(-1 * acceptableTimePrecision)
+			tokenCandidate := []byte(validRefreshToken)
+			mockUUID := uuid.New()
+			mockUserID := UserID(mockUUID[:])
+			tokenInRepo := RefreshTokenInRepo{}
+			if tt.repoErr == nil {
+				tokenInRepo.Hash = hashToken(tokenCandidate)
+				tokenInRepo.UserID = mockUserID
+				if tt.tokenInRepoExpired {
+					tokenInRepo.ExpiresAt = time.Now().Add(-1 * acceptableTimePrecision)
+				} else {
+					tokenInRepo.ExpiresAt = time.Now().Add(acceptableTimePrecision)
+				}
+				if tt.tokenInRepoRevoked {
+					revocationTime := time.Now().Add(-1 * acceptableTimePrecision)
+					tokenInRepo.RevokedAt = &revocationTime
+				}
+			}
+
+			repo := new(mockRepo)
+			repo.On("GetRefreshToken", mock.Anything, mock.Anything).Return(tokenInRepo, tt.repoErr)
+
+			testAuth := New(
+				Dependencies{Repo: repo, KeyFunc: mockKeyFunc},
+				Config{},
+			)
+
+			// execution
+			gotAccessToken, gotErr := testAuth.Refresh(testCtx, tokenCandidate)
+
+			// assertions
+			repo.AssertCalled(t, "GetRefreshToken", testCtx, hashToken(tokenCandidate))
+
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, gotErr, tt.wantErr)
+			} else if tt.wantGenericErr {
+				assert.Error(t, gotErr)
+				assert.NotErrorIs(t, gotErr, ErrInvalidToken)
 			} else {
-				tokenInRepo.ExpiresAt = time.Now().Add(acceptableTimePrecision)
+				assert.NoError(t, gotErr)
+
+				claims, err := parseJWT(string(gotAccessToken), mockKeyFunc)
+				assert.NoError(t, err)
+
+				userIDFromAccessToken, err := userIDfromBase64(claims.UserID)
+				assert.NoError(t, err)
+
+				assert.Equal(t, mockUserID, userIDFromAccessToken)
 			}
-			if tt.tokenInRepoRevoked {
-				revocationTime := time.Now().Add(-1 * acceptableTimePrecision)
-				tokenInRepo.RevokedAt = &revocationTime
-			}
-		}
-
-		repo := new(mockRepo)
-		repo.On("GetRefreshToken", mock.Anything, mock.Anything).Return(tokenInRepo, tt.repoErr)
-
-		testAuth := New(
-			Dependencies{Repo: repo, KeyFunc: mockKeyFunc},
-			Config{},
-		)
-
-		// execution
-		gotAccessToken, gotErr := testAuth.Refresh(testCtx, tokenCandidate)
-
-		// assertions
-		repo.AssertCalled(t, "GetRefreshToken", testCtx, hashToken(tokenCandidate))
-
-		if tt.wantErr != nil {
-			assert.ErrorIs(t, gotErr, tt.wantErr)
-		} else if tt.wantGenericErr {
-			assert.Error(t, gotErr)
-			assert.NotErrorIs(t, gotErr, ErrInvalidToken)
-		} else {
-			assert.NoError(t, gotErr)
-
-			claims, err := parseJWT(string(gotAccessToken), mockKeyFunc)
-			assert.NoError(t, err)
-
-			userIDFromAccessToken, err := userIDfromBase64(claims.UserID)
-			assert.NoError(t, err)
-
-			assert.Equal(t, mockUserID, userIDFromAccessToken)
-		}
-
+		})
 	}
 
 }
@@ -512,28 +519,30 @@ func TestAuthenticate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		// setup
-		testCtx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		t.Run(tt.name, func(t *testing.T) {
+			// setup
+			testCtx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-		mockUUID := uuid.New()
-		mockUserID := UserID(mockUUID[:])
+			mockUUID := uuid.New()
+			mockUserID := UserID(mockUUID[:])
 
-		tokenCandidate := tt.setupTokenCandidate(mockUserID)
+			tokenCandidate := tt.setupTokenCandidate(mockUserID)
 
-		testAuth := New(Dependencies{&mockRepo{}, mockKeyFunc}, Config{})
+			testAuth := New(Dependencies{&mockRepo{}, mockKeyFunc}, Config{})
 
-		// execution
-		userID, gotErr := testAuth.Authenticate(testCtx, tokenCandidate)
+			// execution
+			userID, gotErr := testAuth.Authenticate(testCtx, tokenCandidate)
 
-		// assertions
-		if tt.wantErr != nil {
-			assert.ErrorIs(t, gotErr, tt.wantErr)
-		} else {
-			assert.NoError(t, gotErr)
+			// assertions
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, gotErr, tt.wantErr)
+			} else {
+				assert.NoError(t, gotErr)
 
-			assert.Equal(t, mockUserID, userID)
-		}
+				assert.Equal(t, mockUserID, userID)
+			}
+		})
 	}
 }
 
