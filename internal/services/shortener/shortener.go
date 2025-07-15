@@ -26,6 +26,7 @@ const (
 
 var (
 	ErrInvalidURL        = errors.New("invalid URL")
+	ErrEmptyOwner        = errors.New("empty owner")
 	ErrTokenExpired      = errors.New("token expired")
 	ErrTokenDoesNotExist = errors.New("token does not exist")
 	ErrTokenIsNotUnique  = errors.New("token is not unique")
@@ -219,7 +220,7 @@ func (s *shortener) CreateTokenWithOwner(ctx context.Context, input CreateTokenI
 	if input.OwnerID == nil {
 		logger.Error().
 			Msg("CreateTokenWithOwner: must receive non-nil owner")
-		return URLToken{}, errors.New("shortener, creating token with owner: owner cannot be empty")
+		return URLToken{}, fmt.Errorf("shortener, creating token with owner: %w", ErrEmptyOwner)
 	}
 
 	output, err := s.createToken(ctx, input)

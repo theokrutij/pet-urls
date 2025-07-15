@@ -24,6 +24,7 @@ type Service interface {
 	// If input.Token is empty, generates random base58-encoded token.
 	// If input.TTL <= 0, sets default ttl from app-wide config
 	//
+	//	- If input.OwnerID is nil, returns ErrEmptyOwner
 	//	- If input.URL cannot be interpreted as valid HTTP url, returns ErrInvalidURL.
 	// 	- If input.Token contains more than 64 characters, returns ErrInvalidToken
 	//	- If input.Token is not unique, returns ErrTokenIsNotUnique
