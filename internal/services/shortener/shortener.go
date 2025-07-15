@@ -173,6 +173,10 @@ func (s *shortener) ResolveToken(ctx context.Context, tokenStr string) (URL, err
 				Msg("Requested token expired")
 			return "", fmt.Errorf("shortener, fetching token from cache: %w, token=%s", ErrTokenExpired, token.Token)
 		}
+		logger.Info().
+			Str("token", string(token.Token)).
+			Str("url", string(token.URL)).
+			Msg("ResolveToken: cache hit, success")
 		return token.URL, nil
 	}
 
