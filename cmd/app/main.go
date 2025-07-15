@@ -42,7 +42,7 @@ func run() error {
 	}
 
 	// Redis
-	cacheInstance := cache.New(config.cacheConfig) // Replace with actual cache initialization if needed
+	cacheInstance := cache.New(appContext, config.cacheConfig)
 
 	// Server key
 	jwtKey, err := loadJWTKey()

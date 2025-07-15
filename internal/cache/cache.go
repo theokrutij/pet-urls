@@ -19,9 +19,16 @@ type Config struct {
 	Addr string
 }
 
-func New(config *Config) *cache {
+func New(ctx context.Context, config *Config) *cache {
+	rdb := redis.NewClient(&redis.Options{Addr: config.Addr})
+
+	go func() {
+		<-ctx.Done()
+		rdb.Close()
+	}()
+
 	return &cache{
-		rdb: redis.NewClient(&redis.Options{Addr: config.Addr}),
+		rdb: rdb,
 	}
 }
 
