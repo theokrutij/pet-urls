@@ -29,10 +29,10 @@ func TestUserIDFromJWT(t *testing.T) {
 	gotClaims, err := parseJWT(string(gotToken), mockKeyFunc)
 	assert.NoError(t, err)
 
-	userIDFromJWT := gotClaims.UserID
+	userIDFromJWT, err := userIDfromBase64(gotClaims.UserID)
 	assert.NoError(t, err)
 
-	assert.Equal(t, mockUserID, UserID(userIDFromJWT))
+	assert.Equal(t, mockUserID, userIDFromJWT)
 }
 
 func tamperJWTClaims(token string) string {

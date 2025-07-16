@@ -43,11 +43,10 @@ func parseJWT(tokenCandidate string, keyFunc func() []byte) (*JWTclaims, error) 
 
 	output := new(JWTclaims)
 
-	userIDAsBase64, err := token.Claims.GetSubject()
+	output.UserID, err = token.Claims.GetSubject()
 	if err != nil {
 		return nil, err
 	}
-	output.UserID = userIDAsBase64
 	exp, err := token.Claims.GetExpirationTime()
 	if err != nil {
 		return nil, err
