@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,16 +17,17 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
-		log.Fatal(err)
-	}
-}
+	baseLogger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
-func run() error {
+	// Lifecycle logger
+	lifecycleLogger := baseLogger.With().Str("component", "lifecycle").Logger()
+
 	// Load configuration
 	config, err := loadConfig()
 	if err != nil {
-		return err
+		lifecycleLogger.Fatal().
+			Err(err).
+			Msg("failed to load config")
 	}
 
 	// Context
@@ -38,7 +37,9 @@ func run() error {
 	// Postgres
 	dbInstance, err := postgres.New(appContext, config.dbConfig)
 	if err != nil {
-		return fmt.Errorf("postgres.New: %w", err)
+		lifecycleLogger.Fatal().
+			Err(err).
+			Msg("failed to init postgres client")
 	}
 
 	// Redis
@@ -47,12 +48,13 @@ func run() error {
 	// Server key
 	jwtKey, err := loadJWTKey()
 	if err != nil {
-		return err
+		lifecycleLogger.Fatal().
+			Err(err).
+			Msg("failed to load JWT key")
 	}
 
-	// Logger
-	baseLogger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-	zerolog.DurationFieldUnit = time.Millisecond // default value, here for documentation
+	// Logger config
+	zerolog.DurationFieldUnit = time.Millisecond // it is already set as a default value, written out here for documentation
 	if config.debug {
 		baseLogger = baseLogger.Level(zerolog.DebugLevel)
 	} else {
@@ -88,11 +90,14 @@ func run() error {
 		*config.serverConfig,
 	)
 	if err != nil {
-		return err
+		lifecycleLogger.Fatal().
+			Err(err).
+			Msg("failed to init http server")
 	}
 
 	// Errors channel with a buffer, allowing runners to return error after main goroutine exits
 	errs := make(chan error, 1)
+
 	go func() {
 		errs <- server.Start()
 	}()
@@ -104,14 +109,19 @@ func run() error {
 	// Wait either for stop or for either runner to return an error
 	select {
 	case err := <-errs:
-		return err
+		lifecycleLogger.Fatal().
+			Err(err).
+			Msg("got error from runners, exiting now")
 	case <-stop:
 		ctx, cancel := context.WithTimeout(appContext, 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
-			log.Printf("server shudown: %s", err)
+			lifecycleLogger.Error().
+				Err(err).
+				Msg("error from http server shutdown")
 		}
 	}
 
-	return nil
+	lifecycleLogger.Info().
+		Msg("Exiting now")
 }
