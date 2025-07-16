@@ -1,112 +1,125 @@
 package integration_tests
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
+	"github.com/theokrutij/pet-urls/internal/db/postgres"
 	"github.com/theokrutij/pet-urls/internal/services/shortener"
 )
 
-const (
-	testTimeout             = time.Second
-	acceptableTimePrecision = time.Second
-)
-
-// TestHealthCheck verifies that shortener.HealthCheck returns no error
+// TestShortenerHealthCheck verifies that shortener.HealthCheck returns no error
 // when all its dependencies are healthy and accessible.
-func TestHealthcheck(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+func TestShortenerHealthcheck(t *testing.T) {
+	testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	tx := beginTx(ctx, t)
-	testShortener := setupTestShortener(t, tx)
+	pg := setupTestPostgres(testCtx, t)
 
-	err := testShortener.HealthCheck(ctx)
+	repo := postgres.NewShortenerRepository(pg)
+	cache, _ := setupTestCache(testCtx, t)
+	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
 
-	if err != nil {
-		t.Fatalf("got error from healthcheck: %v", err)
-	}
+	err := testShortener.HealthCheck(testCtx)
+
+	assert.NoError(t, err)
 }
 
 // TestGenerateToken verifies that the GenerateToken method correctly creates a token,
 // writes it to the database, and returns the expected data.
-// It checks that:
-// - No error is returned from GenerateToken
-// - The returned token's URL matches the input URL
-// - The token saved in the database matches the returned token's URL and expiry
-// - The OwnerID field in the database is nil as expected
 func TestGenerateToken(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	// setup
+	testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	tx := beginTx(ctx, t)
-	testShortener := setupTestShortener(t, tx)
+	pg := setupTestPostgres(testCtx, t)
 
-	tokenOutput, err := testShortener.GenerateToken(ctx, "http://example.com")
-	if err != nil {
-		t.Fatalf("got error from GenerateToken: %v", err)
-	}
+	repo := postgres.NewShortenerRepository(pg)
+	cache, redisClient := setupTestCache(testCtx, t)
+	tokenTTL := time.Hour
+	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{TokenTTL: tokenTTL})
 
-	if tokenOutput.URL != "http://example.com" {
-		t.Fatalf("got unexpected URL: %v", tokenOutput.URL)
-	}
+	// execution
+	tokenOutput, err := testShortener.GenerateToken(testCtx, "http://example.com")
+	assert.NoError(t, err)
 
+	// assertions
+	assert.EqualValues(t, "http://example.com", tokenOutput.URL)
+
+	// DB
 	var tokenInDB shortener.URLToken
 	q := `
 		SELECT url, valid_until, owner_id FROM url_tokens
 		WHERE token = $1
 	`
-	err = tx.QueryRow(ctx, q, tokenOutput.Token).Scan(&tokenInDB.URL, &tokenInDB.ExpiresAt, &tokenInDB.OwnerID)
-	if err != nil {
-		t.Fatalf("couldn't fetch token from postgres: %v", err)
-	}
+	err = pg.QueryRow(testCtx, q, tokenOutput.Token).Scan(&tokenInDB.URL, &tokenInDB.ExpiresAt, &tokenInDB.OwnerID)
+	assert.NoError(t, err)
+	assert.Equal(t, tokenOutput.URL, tokenInDB.URL)
+	assert.WithinDuration(t, time.Now().Add(tokenTTL), tokenInDB.ExpiresAt, acceptableTimePrecision)
+	assert.Nil(t, tokenInDB.OwnerID)
 
-	if tokenOutput.URL != tokenInDB.URL {
-		t.Fatalf("expected URL: %v in DB, got: %v", tokenOutput.URL, tokenInDB.URL)
-	}
-	if tokenOutput.ExpiresAt.Equal(*tokenInDB.ExpiresAt) {
-		t.Fatalf("expected ExpiresAt: %+v in DB, got: %+v", tokenOutput.ExpiresAt, tokenInDB.ExpiresAt)
-	}
-	if tokenInDB.OwnerID != nil {
-		t.Fatalf("expected nil owner in DB, got: %v", tokenInDB.OwnerID)
-	}
+	// Cache
+	v, err := redisClient.Get(testCtx, string(tokenOutput.Token)).Result()
+	assert.NoError(t, err)
+	assert.EqualValues(t, tokenOutput.URL, v)
 }
 
-// TestResolveToken verifies that the ResolveToken correctly fetches URL
+// TestResolveToken verifies that the ResolveToken method correctly fetches URL
 // from a database row that has a matching value in the token column.
-func TestResolveToken(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+func TestResolveTokenNoCache(t *testing.T) {
+	testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	tx := beginTx(ctx, t)
+	pg := setupTestPostgres(testCtx, t)
+
 	q := `
 		INSERT INTO url_tokens (token, url, valid_until, owner_id)
 		VALUES ($1, $2, $3, $4)
 	`
-	exp := time.Now().UTC().Add(time.Hour)
 	tokenInDB := shortener.URLToken{
 		Token:     "testtoken",
 		URL:       "http://example.com",
-		ExpiresAt: &exp,
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
 		OwnerID:   nil,
 	}
-	_, err := tx.Exec(ctx, q, tokenInDB.Token, tokenInDB.URL, tokenInDB.ExpiresAt, tokenInDB.OwnerID)
-	if err != nil {
-		t.Fatalf("couldn't insert token in postgres: %v", err)
-	}
+	_, err := pg.Exec(testCtx, q, tokenInDB.Token, tokenInDB.URL, tokenInDB.ExpiresAt, tokenInDB.OwnerID)
+	assert.NoError(t, err)
 
-	testShortener := setupTestShortener(t, tx)
+	repo := postgres.NewShortenerRepository(pg)
+	cache, _ := setupTestCache(testCtx, t)
+	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
 
-	outputURL, err := testShortener.ResolveToken(ctx, string(tokenInDB.Token))
-	if err != nil {
-		t.Fatalf("got error from ResolveToken: %v", err)
-	}
+	outputURL, err := testShortener.ResolveToken(testCtx, string(tokenInDB.Token))
+	assert.NoError(t, err)
 
-	if outputURL != tokenInDB.URL {
-		t.Fatalf("expected url from ResolveToken: %s, got: %s", tokenInDB.URL, outputURL)
-	}
+	assert.EqualValues(t, tokenInDB.URL, outputURL)
+}
+
+func TestResolveTokenCacheHit(t *testing.T) {
+	// setup
+	testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	cache, redisClient := setupTestCache(testCtx, t)
+
+	err := redisClient.Set(testCtx, "testToken", "http://example.com", 10*time.Minute).Err()
+	assert.NoError(t, err)
+
+	pg := setupTestPostgres(testCtx, t)
+	repo := postgres.NewShortenerRepository(pg)
+	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
+
+	// execution
+	gotURL, gotErr := testShortener.ResolveToken(testCtx, "testToken")
+
+	// assertions
+	assert.NoError(t, gotErr)
+	assert.EqualValues(t, "http://example.com", gotURL)
+
 }
 
 // TestCreateTokenWithOwner verifies that CreateTokenWithOwner method
@@ -116,12 +129,16 @@ func TestResolveToken(t *testing.T) {
 // - No error is returned from CreateTokenWithOwner
 // - The returned token matches every field of the input token
 // - The token saved in the database matches every field of the input token
+// - The token exists in cache as a key with correct URL as value
 func TestCreateTokenWithOwner(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	tx := beginTx(ctx, t)
-	testShortener := setupTestShortener(t, tx)
+	pg := setupTestPostgres(testCtx, t)
+
+	repo := postgres.NewShortenerRepository(pg)
+	cache, redisClient := setupTestCache(testCtx, t)
+	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
 
 	tokenInput := shortener.CreateTokenInput{
 		URL:     "http://example.com",
@@ -130,45 +147,32 @@ func TestCreateTokenWithOwner(t *testing.T) {
 		OwnerID: []byte("testuser"),
 	}
 
-	tokenOutput, err := testShortener.CreateTokenWithOwner(ctx, tokenInput)
-	if err != nil {
-		t.Fatalf("got error from CreateTokenWithOwner: %v", err)
-	}
+	tokenOutput, err := testShortener.CreateTokenWithOwner(testCtx, tokenInput)
 
-	if tokenOutput.URL != shortener.URL(tokenInput.URL) {
-		t.Fatalf("expected URL in output: %s, got: %s", tokenInput.URL, tokenOutput.URL)
-	}
-	outputTTL := time.Until(*tokenOutput.ExpiresAt)
-	if time.Duration.Abs(outputTTL-tokenInput.TTL) > acceptableTimePrecision {
-		t.Fatalf("expected TTL in output: %s, got %s", tokenInput.TTL, outputTTL)
-	}
-	if string(tokenOutput.Token) != tokenInput.Token {
-		t.Fatalf("expected Token in output: %s, got: %s", tokenInput.Token, tokenOutput.Token)
-	}
-	if !bytes.Equal(tokenOutput.OwnerID, tokenInput.OwnerID) {
-		t.Fatalf("expected OwnerID in output: %s, got %s", tokenInput.OwnerID, tokenOutput.OwnerID)
-	}
+	// assertions
+	assert.NoError(t, err)
 
+	assert.EqualValues(t, tokenInput.URL, tokenOutput.URL)
+	assert.WithinDuration(t, time.Now().Add(tokenInput.TTL), tokenOutput.ExpiresAt, acceptableTimePrecision)
+	assert.EqualValues(t, tokenInput.Token, tokenOutput.Token)
+	assert.Equal(t, tokenInput.OwnerID, tokenOutput.OwnerID)
+
+	// DB assertions
 	var tokenInDB shortener.URLToken
 	q := `
 		SELECT url, valid_until, owner_id FROM url_tokens
 		WHERE token = $1
 	`
-	err = tx.QueryRow(ctx, q, tokenOutput.Token).Scan(&tokenInDB.URL, &tokenInDB.ExpiresAt, &tokenInDB.OwnerID)
-	if err != nil {
-		t.Fatalf("couldn't fetch token from postgres: %v", err)
-	}
+	err = pg.QueryRow(testCtx, q, tokenOutput.Token).Scan(&tokenInDB.URL, &tokenInDB.ExpiresAt, &tokenInDB.OwnerID)
+	assert.NoError(t, err)
+	assert.EqualValues(t, tokenInput.URL, tokenInDB.URL)
+	assert.WithinDuration(t, time.Now().Add(tokenInput.TTL), tokenInDB.ExpiresAt, acceptableTimePrecision)
+	assert.Equal(t, tokenInput.OwnerID, tokenInDB.OwnerID)
 
-	if string(tokenInDB.URL) != tokenInput.URL {
-		t.Fatalf("expected URL: %s in DB, got: %s", tokenOutput.URL, tokenInDB.URL)
-	}
-	TTLinDB := time.Until(*tokenInDB.ExpiresAt)
-	if time.Duration.Abs(TTLinDB-tokenInput.TTL) > acceptableTimePrecision {
-		t.Fatalf("expected TTL in DB: %v, got: %v", tokenInput.TTL, TTLinDB)
-	}
-	if !bytes.Equal(tokenInDB.OwnerID, tokenInput.OwnerID) {
-		t.Fatalf("expected OwnerID in DB: %v, got: %v", tokenOutput.OwnerID, tokenInDB.OwnerID)
-	}
+	// Cache assertions
+	v, err := redisClient.Get(testCtx, string(tokenOutput.Token)).Result()
+	assert.NoError(t, err)
+	assert.EqualValues(t, tokenOutput.URL, v)
 }
 
 // TestDeleteToken verifies that DeleteToken method
@@ -176,46 +180,46 @@ func TestCreateTokenWithOwner(t *testing.T) {
 // and token.OwnerID is matched by requestingUserID argument
 // It checks that:
 //   - No error is returned from DeleteToken
-//   - After DeleteToken successfully returns, the token no longer exists in the database
+//   - After DeleteToken successfully returns, the token no longer exists in the database or cache
 func TestDeleteToken(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	tx := beginTx(ctx, t)
+	pg := setupTestPostgres(testCtx, t)
 
 	q := `
 		INSERT INTO url_tokens (token, url, valid_until, owner_id)
 		VALUES ($1, $2, $3, $4)
 	`
-
-	exp := time.Now().UTC().Add(time.Hour)
 	targetToken := shortener.URLToken{
 		Token:     "testtoken",
 		URL:       "http://example.com",
-		ExpiresAt: &exp,
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
 		OwnerID:   nil,
 	}
-	_, err := tx.Exec(ctx, q, targetToken.Token, targetToken.URL, targetToken.ExpiresAt, targetToken.OwnerID)
-	if err != nil {
-		t.Fatalf("couldn't insert token in postgres: %v", err)
-	}
+	_, err := pg.Exec(testCtx, q, targetToken.Token, targetToken.URL, targetToken.ExpiresAt, targetToken.OwnerID)
+	assert.NoError(t, err)
 
-	testShortener := setupTestShortener(t, tx)
+	cache, redisClient := setupTestCache(testCtx, t)
+	err = redisClient.Set(testCtx, string(targetToken.Token), string(targetToken.URL), time.Hour).Err()
+	assert.NoError(t, err)
 
-	err = testShortener.DeleteToken(ctx, string(targetToken.Token), targetToken.OwnerID)
-	if err != nil {
-		t.Fatalf("got error from DeleteToken: %v", err)
-	}
+	repo := postgres.NewShortenerRepository(pg)
+	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
 
+	// execution
+	err = testShortener.DeleteToken(testCtx, string(targetToken.Token), targetToken.OwnerID)
+	assert.NoError(t, err)
+
+	// DB assertions
 	q = `
 		SELECT url, valid_until, owner_id FROM url_tokens
 		WHERE token = $1
 	`
-	rows, err := tx.Query(ctx, q, targetToken.Token)
-	if err != nil {
-		t.Fatalf("couldn't query database: %v", err)
-	}
-	if rows.Next() {
-		t.Fatalf("expected no matching rows in db")
-	}
+	err = pg.QueryRow(testCtx, q, targetToken.Token).Scan()
+	assert.ErrorIs(t, err, pgx.ErrNoRows)
+
+	// Cache assertions
+	_, err = redisClient.Get(testCtx, string(targetToken.Token)).Result()
+	assert.ErrorIs(t, err, redis.Nil)
 }
