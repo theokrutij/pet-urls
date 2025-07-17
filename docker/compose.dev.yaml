@@ -2,13 +2,13 @@
 # Development Docker Compose File
 #
 # Services:
-# - Postgres (v17.5-alpine)
+# - Postgres (v17.5)
 #   - Exposes port 5432
 #   - Persists data using a named Docker volume (`postgres_data`)
 #   - Logging level set to INFO, logs all SQL statements
 #   - Healthcheck enabled using `pg_isready`
 #
-# - Redis (v8.0-alpine)
+# - Redis (v8.0)
 #   - Exposes port 6379
 #   - Uses custom configuration file `redis.conf`
 #
@@ -19,7 +19,7 @@
 
 services:
   postgres:
-    image: postgres:17.5-alpine
+    image: postgres:17.5
     container_name: postgres-dev
     shm_size: 128mb
     restart: unless-stopped
@@ -43,7 +43,7 @@ services:
       - log_statement=all
 
   redis: 
-    image: redis:8.0-alpine
+    image: redis:8.0
     container_name: redis-dev
     volumes:
       - ./redis.conf:/usr/local/etc/redis/redis.conf
