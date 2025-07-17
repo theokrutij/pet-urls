@@ -844,6 +844,21 @@ func TestDeleteToken(t *testing.T) {
 			wantAnyError:              true,
 		},
 		{
+			name: "repo get not found error",
+			depSetup: func() (repository, cache) {
+				repo := new(mockRepo)
+				repo.On("GetToken", mock.Anything, mock.Anything).Return(
+					URLToken{},
+					mockNotFoundError{},
+				)
+
+				cache := new(mockCache)
+
+				return repo, cache
+			},
+			requestingUserID: []byte("testuserID"),
+		},
+		{
 			name: "repo delete not found error",
 			depSetup: func() (repository, cache) {
 				repo := new(mockRepo)
@@ -863,6 +878,22 @@ func TestDeleteToken(t *testing.T) {
 			requestingUserID:          []byte("testuserID"),
 			cacheDeleteShouldBeCalled: true,
 			repoDeleteShouldBeCalled:  true,
+		},
+		{
+			name: "repo get generic error",
+			depSetup: func() (repository, cache) {
+				repo := new(mockRepo)
+				repo.On("GetToken", mock.Anything, mock.Anything).Return(
+					URLToken{},
+					errGeneric,
+				)
+
+				cache := new(mockCache)
+
+				return repo, cache
+			},
+			requestingUserID: []byte("testuserID"),
+			wantAnyError:     true,
 		},
 		{
 			name: "repo delete generic error",
