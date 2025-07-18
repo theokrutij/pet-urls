@@ -49,7 +49,7 @@ services:
     working_dir: /app
     environment: 
       TEST_POSTGRES_DSN: postgres://testuser:testpassword@db:5432/testdb?sslmode=disable
-      TEST_REDIS_URL: cache:6379
+      TEST_REDIS_URL: redis://cache:6379
     depends_on:
       db:
         condition: service_healthy
