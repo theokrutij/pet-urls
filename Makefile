@@ -2,39 +2,35 @@ run-app:
 	go run ./cmd/app --debug
 
 DEV_COMPOSE_FILE := docker/compose.dev.yaml
+PROJECT_NAME := pet_urls
 VOLUME_NAME := postgres_data
 
+
 compose-up:
-	docker compose -f $(DEV_COMPOSE_FILE) up
+	docker compose -f $(DEV_COMPOSE_FILE) -p ${PROJECT_NAME} up -d
 
 compose-down:
-	docker compose -f $(DEV_COMPOSE_FILE) down
+	docker compose -f $(DEV_COMPOSE_FILE) -p ${PROJECT_NAME} down
 
 compose-restart: compose-down compose-up
 
 compose-logs:
-	docker compose -f $(DEV_COMPOSE_FILE) logs -f
+	docker compose -f $(DEV_COMPOSE_FILE) -p ${PROJECT_NAME} logs -f
 
 compose-ps:
-	docker compose -f $(DEV_COMPOSE_FILE) ps
+	docker compose -f $(DEV_COMPOSE_FILE) -p ${PROJECT_NAME} ps
 
 compose-build:
-	docker compose -f $(DEV_COMPOSE_FILE) build
-
-compose-exec:
-	docker compose -f $(DEV_COMPOSE_FILE) exec db bash
+	docker compose -f $(DEV_COMPOSE_FILE) -p ${PROJECT_NAME} build
 
 volume-rm:
-	@if [ -n "$(VOLUME_NAME)" ]; then \
-		docker volume rm $(VOLUME_NAME); \
-	else \
-		echo "Volume 'postgres_data' does not exist."; \
-	fi
+	docker volume rm ${PROJECT_NAME}_$(VOLUME_NAME)
+
 
 
 # Migration config
-MIGRATIONS_DIR=./internal/db/postgres/migrations
-DB_DSN=postgres://postgres:dev-password@localhost:5432/postgres?sslmode=disable
+MIGRATIONS_DIR ?= ./internal/db/postgres/migrations
+DB_DSN ?= postgres://postgres:dev-password@localhost:5432/postgres?sslmode=disable
 
 # Create a new migration
 create-migration:
@@ -70,3 +66,6 @@ TEST_COMPOSE_FILE := docker/compose.test.yaml
 run-integration-tests:
 	@docker compose -f $(TEST_COMPOSE_FILE) up --build test-runner && \
 	docker compose -f $(TEST_COMPOSE_FILE) down -t 1
+
+run-unit-tests:
+	@go test ./internal/services/... -count=1
