@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/theokrutij/pet-urls/internal/cache/redis"
 	"github.com/theokrutij/pet-urls/internal/db/postgres"
 	"github.com/theokrutij/pet-urls/internal/services/shortener"
 )
@@ -21,7 +21,7 @@ func TestShortenerHealthcheck(t *testing.T) {
 	pg := setupTestPostgres(testCtx, t)
 
 	repo := postgres.NewShortenerRepository(pg)
-	cache, _ := setupTestCache(testCtx, t)
+	cache := redis.NewShortenerCache(setupTestRedis(testCtx, t))
 	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
 
 	err := testShortener.HealthCheck(testCtx)
@@ -39,7 +39,8 @@ func TestGenerateToken(t *testing.T) {
 	pg := setupTestPostgres(testCtx, t)
 
 	repo := postgres.NewShortenerRepository(pg)
-	cache, redisClient := setupTestCache(testCtx, t)
+	redisClient := setupTestRedis(testCtx, t)
+	cache := redis.NewShortenerCache(redisClient)
 	tokenTTL := time.Hour
 	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{TokenTTL: tokenTTL})
 
@@ -63,8 +64,9 @@ func TestGenerateToken(t *testing.T) {
 	assert.Nil(t, tokenInDB.OwnerID)
 
 	// Cache
-	v, err := redisClient.Get(testCtx, string(tokenOutput.Token)).Result()
+	v, ok, err := redisClient.Get(testCtx, string(tokenOutput.Token))
 	assert.NoError(t, err)
+	assert.True(t, ok)
 	assert.EqualValues(t, tokenOutput.URL, v)
 }
 
@@ -90,7 +92,7 @@ func TestResolveTokenNoCache(t *testing.T) {
 	assert.NoError(t, err)
 
 	repo := postgres.NewShortenerRepository(pg)
-	cache, _ := setupTestCache(testCtx, t)
+	cache := redis.NewShortenerCache(setupTestRedis(testCtx, t))
 	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
 
 	outputURL, err := testShortener.ResolveToken(testCtx, string(tokenInDB.Token))
@@ -104,13 +106,14 @@ func TestResolveTokenCacheHit(t *testing.T) {
 	testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	cache, redisClient := setupTestCache(testCtx, t)
+	redisClient := setupTestRedis(testCtx, t)
 
-	err := redisClient.Set(testCtx, "testToken", "http://example.com", 10*time.Minute).Err()
+	err := redisClient.Set(testCtx, "testToken", "http://example.com", 10*time.Minute)
 	assert.NoError(t, err)
 
 	pg := setupTestPostgres(testCtx, t)
 	repo := postgres.NewShortenerRepository(pg)
+	cache := redis.NewShortenerCache(redisClient)
 	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
 
 	// execution
@@ -135,9 +138,10 @@ func TestCreateTokenWithOwner(t *testing.T) {
 	defer cancel()
 
 	pg := setupTestPostgres(testCtx, t)
+	redisClient := setupTestRedis(testCtx, t)
 
 	repo := postgres.NewShortenerRepository(pg)
-	cache, redisClient := setupTestCache(testCtx, t)
+	cache := redis.NewShortenerCache(redisClient)
 	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
 
 	tokenInput := shortener.CreateTokenInput{
@@ -170,8 +174,9 @@ func TestCreateTokenWithOwner(t *testing.T) {
 	assert.Equal(t, tokenInput.OwnerID, tokenInDB.OwnerID)
 
 	// Cache assertions
-	v, err := redisClient.Get(testCtx, string(tokenOutput.Token)).Result()
+	v, ok, err := redisClient.Get(testCtx, string(tokenOutput.Token))
 	assert.NoError(t, err)
+	assert.True(t, ok)
 	assert.EqualValues(t, tokenOutput.URL, v)
 }
 
@@ -200,11 +205,12 @@ func TestDeleteToken(t *testing.T) {
 	_, err := pg.Exec(testCtx, q, targetToken.Token, targetToken.URL, targetToken.ExpiresAt, targetToken.OwnerID)
 	assert.NoError(t, err)
 
-	cache, redisClient := setupTestCache(testCtx, t)
-	err = redisClient.Set(testCtx, string(targetToken.Token), string(targetToken.URL), time.Hour).Err()
+	redisClient := setupTestRedis(testCtx, t)
+	err = redisClient.Set(testCtx, string(targetToken.Token), string(targetToken.URL), time.Hour)
 	assert.NoError(t, err)
 
 	repo := postgres.NewShortenerRepository(pg)
+	cache := redis.NewShortenerCache(redisClient)
 	testShortener := shortener.New(shortener.Dependencies{Repo: repo, Cache: cache}, shortener.Config{})
 
 	// execution
@@ -220,6 +226,7 @@ func TestDeleteToken(t *testing.T) {
 	assert.ErrorIs(t, err, pgx.ErrNoRows)
 
 	// Cache assertions
-	_, err = redisClient.Get(testCtx, string(targetToken.Token)).Result()
-	assert.ErrorIs(t, err, redis.Nil)
+	_, ok, err := redisClient.Get(testCtx, string(targetToken.Token))
+	assert.NoError(t, err)
+	assert.False(t, ok)
 }

@@ -9,7 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
-	"github.com/theokrutij/pet-urls/internal/cache"
+	"github.com/theokrutij/pet-urls/internal/cache/redis"
 	"github.com/theokrutij/pet-urls/internal/db/postgres"
 	"github.com/theokrutij/pet-urls/internal/services/auth"
 	"github.com/theokrutij/pet-urls/internal/services/shortener"
@@ -43,7 +43,8 @@ func main() {
 	}
 
 	// Redis
-	cacheInstance, err := cache.New(appContext, config.cacheConfig)
+	config.cacheConfig.Logger = baseLogger.With().Str("component", "redis").Logger()
+	redisInstance, err := redis.New(appContext, config.cacheConfig)
 	if err != nil {
 		lifecycleLogger.Fatal().
 			Err(err).
@@ -76,7 +77,7 @@ func main() {
 			Shortener: shortener.New(
 				shortener.Dependencies{
 					Repo:  postgres.NewShortenerRepository(dbInstance),
-					Cache: cacheInstance,
+					Cache: redis.NewShortenerCache(redisInstance),
 				},
 				shortener.Config{
 					Logger: baseLogger.With().Str("component", "shortener").Logger(),

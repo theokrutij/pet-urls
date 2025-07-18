@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/theokrutij/pet-urls/internal/cache"
+	"github.com/theokrutij/pet-urls/internal/cache/redis"
 	"github.com/theokrutij/pet-urls/internal/db/postgres"
 	httpx "github.com/theokrutij/pet-urls/internal/transport/http"
 )
@@ -14,7 +14,7 @@ type AppConfig struct {
 	debug        bool
 	serverConfig httpx.Config
 	pgConfig     postgres.Config
-	cacheConfig  cache.Config
+	cacheConfig  redis.Config
 }
 
 // -------- ENV variable keys -------
@@ -105,8 +105,8 @@ func loadPostgresConfigFromEnv() (*postgres.Config, error) {
 	return pgConfig, nil
 }
 
-func loadRedisConfigFromEnv() (*cache.Config, error) {
-	var redisConfig = new(cache.Config)
+func loadRedisConfigFromEnv() (*redis.Config, error) {
+	var redisConfig = new(redis.Config)
 
 	var ok bool
 	redisConfig.RedisURL, ok = os.LookupEnv(EnvKeyRedisURL)

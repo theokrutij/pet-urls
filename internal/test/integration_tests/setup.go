@@ -8,10 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/theokrutij/pet-urls/internal/cache"
+	redisx "github.com/theokrutij/pet-urls/internal/cache/redis"
 	"github.com/theokrutij/pet-urls/internal/db/postgres"
 )
 
@@ -46,19 +44,13 @@ func setupTestPostgres(ctx context.Context, t *testing.T) postgres.Postgres {
 	return testPostgres{tx}
 }
 
-func setupTestCache(ctx context.Context, t *testing.T) (*cache.Cache, redis.Client) {
-	testRedisURL := os.Getenv(EnvKeyTestRedisURL)
-
-	redisOpts, err := redis.ParseURL(testRedisURL)
-	assert.NoError(t, err)
-	cacheFlusher := redis.NewClient(redisOpts)
-	t.Cleanup(func() {
-		cacheFlusher.FlushDB(ctx)
-		cacheFlusher.Close()
-	})
-
-	cache, err := cache.New(ctx, cache.Config{RedisURL: testRedisURL})
+func setupTestRedis(ctx context.Context, t *testing.T) redisx.Redis {
+	redisClient, err := redisx.New(ctx, redisx.Config{RedisURL: os.Getenv(EnvKeyTestRedisURL)})
 	require.NoError(t, err)
 
-	return cache, *cacheFlusher
+	t.Cleanup(func() {
+		redisClient.FlushDB(ctx)
+	})
+
+	return redisClient
 }
