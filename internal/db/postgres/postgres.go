@@ -28,16 +28,17 @@ type postgresConnectionPool struct {
 }
 
 type Config struct {
-	DSN string
+	DSN string // required
 
-	MaxConns          int32         // min: 20, max: 50
-	MinIddleConns     int32         // min: 0, max: 5
-	MaxConnLifetime   time.Duration // min: 0, max: 1h
-	MaxConnIdleTime   time.Duration // min: 0, max: 10m
-	HealthCheckPeriod time.Duration // min: 30s, max: 2m
+	MaxConnLifetimeSeconds   int // default: 3600
+	MaxConnIdleTimeSeconds   int // default: 0
+	MaxConns                 int // default: 4
+	MinConns                 int // default: 0
+	MinIdleConns             int // default: 0
+	HealthCheckPeriodSeconds int // default: 60
 }
 
-func New(ctx context.Context, config *Config) (Postgres, error) {
+func New(ctx context.Context, config Config) (Postgres, error) {
 	pgxConfig, err := pgxpool.ParseConfig(config.DSN)
 	if err != nil {
 		return nil, err
@@ -58,47 +59,31 @@ func New(ctx context.Context, config *Config) (Postgres, error) {
 	return &postgresConnectionPool{pool}, nil
 }
 
-func applyAppConfig(pgxConfig *pgxpool.Config, appConfig *Config) *pgxpool.Config {
-	if appConfig.MaxConns < 20 {
-		pgxConfig.MaxConns = 20
-	} else if appConfig.MaxConns > 50 {
-		pgxConfig.MaxConns = 50
+func applyAppConfig(pgxConfig *pgxpool.Config, appConfig Config) *pgxpool.Config {
+	if appConfig.MaxConnLifetimeSeconds == 0 {
+		pgxConfig.MaxConnLifetime = 3600 * time.Second
 	} else {
-		pgxConfig.MaxConns = appConfig.MaxConns
-	}
-
-	if appConfig.MinIddleConns < 0 {
-		pgxConfig.MinIdleConns = 0
-	} else if appConfig.MinIddleConns > 5 {
-		pgxConfig.MinIdleConns = 5
-	} else {
-		pgxConfig.MinIdleConns = appConfig.MinIddleConns
-	}
-
-	if appConfig.MaxConnLifetime < 0 {
-		pgxConfig.MaxConnLifetime = time.Hour
-	} else if appConfig.MaxConnLifetime > time.Hour {
-		pgxConfig.MaxConnLifetime = time.Hour
-	} else {
-		pgxConfig.MaxConnLifetime = appConfig.MaxConnLifetime
+		pgxConfig.MaxConnLifetime = time.Duration(appConfig.MaxConnLifetimeSeconds) * time.Second
 	}
 
 	pgxConfig.MaxConnLifetimeJitter = pgxConfig.MaxConnLifetime / 10
 
-	if appConfig.MaxConnIdleTime < 0 {
-		pgxConfig.MaxConnIdleTime = 0
-	} else if appConfig.MaxConnIdleTime > 10*time.Minute {
-		pgxConfig.MaxConnIdleTime = 10 * time.Minute
+	pgxConfig.MaxConnIdleTime = time.Duration(appConfig.MaxConnIdleTimeSeconds) * time.Second
+
+	if appConfig.MaxConns == 0 {
+		pgxConfig.MaxConns = 4
 	} else {
-		pgxConfig.MaxConnIdleTime = appConfig.MaxConnIdleTime
+		pgxConfig.MaxConns = int32(appConfig.MaxConns)
 	}
 
-	if appConfig.HealthCheckPeriod < 30*time.Second {
-		pgxConfig.HealthCheckPeriod = 40 * time.Second
-	} else if appConfig.HealthCheckPeriod > 2*time.Minute {
-		pgxConfig.HealthCheckPeriod = 2 * time.Minute
+	pgxConfig.MinConns = int32(appConfig.MinConns)
+
+	pgxConfig.MinIdleConns = int32(appConfig.MinIdleConns)
+
+	if appConfig.HealthCheckPeriodSeconds == 0 {
+		pgxConfig.HealthCheckPeriod = 60 * time.Second
 	} else {
-		pgxConfig.HealthCheckPeriod = appConfig.HealthCheckPeriod
+		pgxConfig.HealthCheckPeriod = time.Duration(appConfig.HealthCheckPeriodSeconds) * time.Second
 	}
 
 	return pgxConfig

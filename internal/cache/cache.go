@@ -15,20 +15,52 @@ type Cache struct {
 }
 
 type Config struct {
-	Addr string
+	RedisURL string // required
+
+	PoolSize               int // default: 5
+	MinIdleConns           int // default: 0
+	MaxIdleConns           int // default: 1
+	ConnMaxIdleTimeSeconds int // default: 5
 }
 
-func New(ctx context.Context, config *Config) *Cache {
-	rdb := redis.NewClient(&redis.Options{Addr: config.Addr})
+func New(ctx context.Context, config Config) (*Cache, error) {
+	redisOptions, err := redis.ParseURL(config.RedisURL)
+	if err != nil {
+		return nil, err
+	}
+	redisOptions = applyAppConfig(redisOptions, config)
+	rdb := redis.NewClient(redisOptions)
 
 	go func() {
 		<-ctx.Done()
 		rdb.Close()
 	}()
 
-	return &Cache{
-		rdb: rdb,
+	return &Cache{rdb: rdb}, nil
+}
+
+func applyAppConfig(redisOptions *redis.Options, appConfig Config) *redis.Options {
+	if appConfig.PoolSize == 0 {
+		redisOptions.PoolSize = 5
+	} else {
+		redisOptions.PoolSize = appConfig.PoolSize
 	}
+
+	redisOptions.MinIdleConns = appConfig.MinIdleConns
+
+	if appConfig.MaxIdleConns == 0 {
+		redisOptions.MaxIdleConns = 1
+	} else {
+		redisOptions.MaxIdleConns = appConfig.MaxIdleConns
+	}
+
+	if appConfig.ConnMaxIdleTimeSeconds == 0 {
+		redisOptions.ConnMaxIdleTime = 5 * time.Second
+	} else {
+		redisOptions.ConnMaxIdleTime = time.Duration(appConfig.ConnMaxIdleTimeSeconds) * time.Second
+	}
+
+	return redisOptions
 }
 
 func (c *Cache) HealthCheck(ctx context.Context) error {

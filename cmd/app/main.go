@@ -35,7 +35,7 @@ func main() {
 	defer cancelAppContext()
 
 	// Postgres
-	dbInstance, err := postgres.New(appContext, config.dbConfig)
+	dbInstance, err := postgres.New(appContext, config.pgConfig)
 	if err != nil {
 		lifecycleLogger.Fatal().
 			Err(err).
@@ -43,7 +43,12 @@ func main() {
 	}
 
 	// Redis
-	cacheInstance := cache.New(appContext, config.cacheConfig)
+	cacheInstance, err := cache.New(appContext, config.cacheConfig)
+	if err != nil {
+		lifecycleLogger.Fatal().
+			Err(err).
+			Msg("failed to init redis client")
+	}
 
 	// Server key
 	jwtKey, err := loadJWTKey()
@@ -87,7 +92,7 @@ func main() {
 				},
 			),
 		},
-		*config.serverConfig,
+		config.serverConfig,
 	)
 	if err != nil {
 		lifecycleLogger.Fatal().
