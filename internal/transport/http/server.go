@@ -72,6 +72,8 @@ func NewServer(deps Dependencies, config Config) (*server, error) {
 		server.router,
 		server.requestIDMiddleware,
 		server.observabilityMiddleware,
+		timeoutMiddleware(handleTimeout),
+		maxBodyMiddleware(maxBodySizeBytes),
 	)
 
 	// Config
@@ -90,13 +92,6 @@ func applyConfig(server *server, config Config) *server {
 		server.s.ReadTimeout = readTimeout
 		server.s.WriteTimeout = writeTimeout
 		server.s.IdleTimeout = idleTimeout
-
-		// HTTP-specific middleware
-		server.s.Handler = chain(
-			server.s.Handler,
-			timeoutMiddleware(handleTimeout), // hard timeout in case handler doesn't honor context properly
-			maxBodyMiddleware,                // body size limit
-		)
 	}
 
 	// address
@@ -117,13 +112,6 @@ func applyConfig(server *server, config Config) *server {
 	}
 
 	return server
-}
-
-func chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		h = middlewares[i](h)
-	}
-	return h
 }
 
 func (s *server) Start() error {
