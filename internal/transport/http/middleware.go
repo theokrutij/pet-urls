@@ -144,6 +144,9 @@ func (ww *writerWrapper) Write(b []byte) (int, error) {
 }
 
 func (ww *writerWrapper) Flush() {
+	if !ww.wroteHeader {
+		ww.status = 200
+	}
 	ww.ResponseWriter.WriteHeader(ww.status)
 	ww.ResponseWriter.Write(ww.buffer.Bytes())
 }
