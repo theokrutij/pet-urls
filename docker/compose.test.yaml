@@ -1,0 +1,63 @@
+# ------------------------------------------------------------------------------
+# Integration Test Environment
+#
+# Services:
+# - db (PostgreSQL 17.5-alpine)
+#   - Sets up a test database with credentials
+#   - Healthcheck waits for readiness using pg_isready
+#
+# - cache (Redis 8.0-alpine)
+#   - Standard Redis instance with healthcheck via redis-cli ping
+#
+# - test-runner
+#   - Built from custom Dockerfile
+#   - Waits for db and cache to be healthy
+#   - Runs database migrations
+#   - Executes integration tests
+#
+# Used by the `make run-integration-tests` command
+# ------------------------------------------------------------------------------
+
+services:
+  db:
+    image: postgres:17.5-alpine
+    container_name: postgres-test
+    shm_size: 128m
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: testdb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      start_period: 5s
+      start_interval: 1s
+
+  cache: 
+    image: redis:8.0-alpine
+    container_name: redis-test
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 5s
+      start_interval: 1s
+
+  test-runner:
+    image: pet-urls/test-runner:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
+    container_name: test-runner
+    working_dir: /app
+    environment: 
+      TEST_POSTGRES_DSN: postgres://testuser:testpassword@db:5432/testdb?sslmode=disable
+      TEST_REDIS_URL: redis://cache:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    command: 
+       - /bin/sh
+       - -c
+       - >
+        ./migrate up -dsn $$TEST_POSTGRES_DSN -dir './internal/db/postgres/migrations' &&
+        go test -v ./internal/test/integration_tests

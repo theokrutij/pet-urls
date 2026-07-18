@@ -1,0 +1,27 @@
+# Build stage
+FROM golang:1.23 AS builder
+
+WORKDIR /app
+
+# Cache dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY cmd/app ./cmd/app
+COPY internal ./internal
+
+# Build static binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o server ./cmd/app
+
+# Final stage: minimal scratch image
+FROM scratch
+
+# Copy binary from builder
+COPY --from=builder /app/server /server
+
+# Use non-root user (UID 1000)
+USER 1000
+
+# Run the binary
+ENTRYPOINT ["/server"]
